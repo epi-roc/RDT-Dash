@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPIROC | Command Center V2</title>
+    <title>EPIROC | Command Center V3</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -11,6 +11,17 @@
     :root { --epi-black: #000000; --epi-yellow: #FFCE00; --bg: #1a1c23; --card: #252830; --text: #fff; --border: #3a3f4b; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     body { background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+    /* --- LOGIN OVERLAY CSS --- */
+    #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--epi-black); z-index: 10000; display: flex; justify-content: center; align-items: center; }
+    .login-box { background: var(--card); padding: 40px; border-radius: 8px; border-top: 5px solid var(--epi-yellow); width: 350px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .login-logo { color: var(--epi-yellow); font-size: 2.5rem; font-weight: 900; font-style: italic; letter-spacing: -1px; margin-bottom: 5px; }
+    .login-subtitle { font-size: 0.8rem; color: #888; letter-spacing: 2px; margin-bottom: 30px; }
+    .login-input { width: 100%; background: #111; border: 1px solid var(--border); color: #fff; padding: 12px; margin-bottom: 15px; border-radius: 4px; font-size: 0.9rem; outline: none; }
+    .login-input:focus { border-color: var(--epi-yellow); }
+    .btn-login { width: 100%; background: var(--epi-yellow); color: #000; font-weight: 900; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; transition: 0.2s; margin-top: 10px; }
+    .btn-login:hover { background: #e6b800; }
+    .login-error { color: #ff4c4c; font-size: 0.8rem; font-weight: bold; margin-top: 15px; display: none; }
 
     .command-header { background: var(--epi-black); padding: 5px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid var(--epi-yellow); color: #fff; height: 65px; flex-shrink: 0; }
     .header-left { display: flex; align-items: center; gap: 15px; }
@@ -79,10 +90,21 @@
     body[data-mode="CONSUMPTION"] .mode-cons { display: flex; }
     body[data-mode="COSTING"] .mode-cost { display: flex; }
 
-    #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; color: var(--epi-yellow); font-weight: bold; display: none; }
+    #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10001; color: var(--epi-yellow); font-weight: bold; display: none; }
 </style>
 </head>
 <body data-mode="PERFORMANCE">
+
+<div id="login-overlay">
+    <div class="login-box">
+        <div class="login-logo">Epiroc</div>
+        <div class="login-subtitle">VAULT AUTHENTICATION</div>
+        <input type="text" id="log-user" class="login-input" placeholder="Username" autocomplete="off">
+        <input type="password" id="log-pass" class="login-input" placeholder="Password">
+        <button class="btn-login" onclick="attemptLogin()"><i class="fas fa-lock"></i> SECURE LOGIN</button>
+        <div class="login-error" id="log-err">Access Denied. Invalid Credentials.</div>
+    </div>
+</div>
 
 <div id="loader"><i class="fas fa-spinner fa-spin fa-2x" style="margin-bottom: 15px;"></i> Loading Vault Data...</div>
 
@@ -99,8 +121,8 @@
     </div>
     <div class="header-right">
         <div class="epi-logo-text">Epiroc</div>
-        <div class="login-info">VERSION 2.0 | LOGGED IN: <span>HQ Admin</span></div>
-        <button class="btn-logout">LOG OUT</button>
+        <div class="login-info">VERSION 3.0 | LOGGED IN: <span id="active-user-display">---</span></div>
+        <button class="btn-logout" onclick="location.reload()">LOG OUT</button>
     </div>
 </header>
 
@@ -193,16 +215,46 @@ let filterHierarchy = {};
 let chartTypeState = {}; 
 let currentChartData = {}; 
 
+// 🚨 NEW LOGIN LOGIC 🚨
+async function attemptLogin() {
+    const u = document.getElementById('log-user').value;
+    const p = document.getElementById('log-pass').value;
+    const errBox = document.getElementById('log-err');
+    const loader = document.getElementById('loader');
+    
+    if(!u || !p) return;
+    errBox.style.display = 'none';
+    loader.style.display = 'flex';
+    
+    try {
+        const payload = JSON.stringify({ action: "dashboardLogin", username: u, password: p });
+        const res = await fetch(PERF_APP_URL, { method: "POST", body: payload }).then(r => r.json());
+        
+        if (res.status === "SUCCESS") {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('active-user-display').innerText = res.user;
+            fetchData(); // Only fetch data AFTER successful login
+        } else {
+            errBox.style.display = 'block';
+            loader.style.display = 'none';
+        }
+    } catch (err) {
+        errBox.innerText = "Connection Error. Please try again.";
+        errBox.style.display = 'block';
+        loader.style.display = 'none';
+    }
+}
+
+// 🚨 THE "DUMB TEXT" DATE PARSER 🚨
 function parseRowDate(val) {
     if (!val) return new Date(NaN);
     let s = String(val).trim();
     
-    // Checks for strict DD/MM/YYYY or DD-MM-YYYY
-    let match = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+    // Explicitly parses the "yyyy-MM-dd" text we are now forcing Apps Script to send
+    let match = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
     if (match) {
-        return new Date(match[3], parseInt(match[2]) - 1, match[1]);
+        return new Date(match[1], parseInt(match[2]) - 1, match[3]);
     }
-    // Fallback for native formats (like DD-MMM-YYYY)
     return new Date(s);
 }
 
@@ -214,7 +266,13 @@ window.onload = () => {
     
     Chart.defaults.color = '#888';
     Chart.defaults.font.family = "'Segoe UI', sans-serif";
-    fetchData();
+    
+    // Note: We REMOVED fetchData() from here. It now only runs if login is successful.
+    
+    // Press Enter to Login
+    document.getElementById('log-pass').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') attemptLogin();
+    });
 };
 
 function switchMode() { document.body.setAttribute('data-mode', document.getElementById('flt-mode').value); }
@@ -332,7 +390,6 @@ function processData() {
     pData.forEach(r => {
         const fleet = String(r[4]).trim();
         const m = parseFloat(r[9]) || 0; 
-        // Force the date strings to appear correctly mapped on the X Axis
         const dateKey = parseRowDate(r[1]).toLocaleDateString('en-GB'); 
 
         tMetres += m;
@@ -395,7 +452,6 @@ function processData() {
     drawChart('ch-ream', reamData, 'tot-ream', '#FFCE00');
     drawChart('ch-split', splitData, 'tot-split', '#FFCE00');
     
-    // Specifically mapping daily dates to the Daily Trend box
     let sortedTrend = {};
     Object.keys(dailyTrend).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-'))).forEach(k => sortedTrend[k] = dailyTrend[k]);
     drawChart('ch-trend', sortedTrend, null, '#03A9F4');
@@ -456,7 +512,6 @@ window.toggleChartType = function(canvasId) {
     if(cache) drawChart(canvasId, cache.dataObj, cache.totalId, cache.colorCode);
 }
 
-// 🚨 THE FORCED VERTICAL RENDER ENGINE 🚨
 function drawChart(canvasId, dataObj, totalId, colorCode) {
     currentChartData[canvasId] = { dataObj, totalId, colorCode };
     const ctx = document.getElementById(canvasId).getContext('2d');
@@ -476,7 +531,7 @@ function drawChart(canvasId, dataObj, totalId, colorCode) {
     charts[canvasId] = new Chart(ctx, {
         type: type,
         data: {
-            labels: sortedKeys, // These labels will populate the X-Axis
+            labels: sortedKeys,
             datasets: [{
                 data: values,
                 backgroundColor: type === 'line' ? colorCode + '20' : colorCode,
@@ -491,7 +546,7 @@ function drawChart(canvasId, dataObj, totalId, colorCode) {
             }]
         },
         options: {
-            indexAxis: 'x', // <--- GUARANTEES VERTICAL COLUMNS
+            indexAxis: 'x', 
             layout: { padding: { top: 25, right: 10, left: 10, bottom: 0 } }, 
             responsive: true, 
             maintainAspectRatio: false,
@@ -507,16 +562,8 @@ function drawChart(canvasId, dataObj, totalId, colorCode) {
                 }
             },
             scales: { 
-                x: { 
-                    grid: { display: false }, 
-                    ticks: { color: '#ccc', font: { size: 9 }, maxRotation: 45, minRotation: 0, autoSkip: false } // Forces labels to show
-                }, 
-                y: { 
-                    grid: { color: '#333' }, 
-                    ticks: { display: false }, 
-                    beginAtZero: true, 
-                    grace: '15%' 
-                } 
+                x: { grid: { display: false }, ticks: { color: '#ccc', font: { size: 9 }, maxRotation: 45, minRotation: 0, autoSkip: false } }, 
+                y: { grid: { color: '#333' }, ticks: { display: false }, beginAtZero: true, grace: '15%' } 
             }
         }
     });
