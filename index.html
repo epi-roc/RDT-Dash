@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPIROC | Command Center V2</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+    :root { --epi-black: #000000; --epi-yellow: #FFCE00; --bg: #1a1c23; --card: #252830; --text: #fff; --border: #3a3f4b; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+    .command-header { background: var(--epi-black); padding: 5px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid var(--epi-yellow); color: #fff; height: 65px; flex-shrink: 0; }
+    .header-left { display: flex; align-items: center; gap: 15px; }
+    .active-pop-box { background: #1a1a1a; border: 1px solid #333; border-left: 3px solid var(--epi-yellow); padding: 5px 12px; border-radius: 4px; display: flex; flex-direction: column; justify-content: center; }
+    .ap-title { font-size: 0.6rem; color: #888; font-weight: 800; letter-spacing: 1px; }
+    .ap-value { font-size: 1.1rem; font-weight: 900; color: #fff; display: flex; align-items: baseline; gap: 5px; }
+    .ap-value span { font-size: 0.7rem; color: #ccc; }
+    
+    .header-center { text-align: center; flex-grow: 1; }
+    .header-center h1 { font-size: 1.5rem; font-weight: 900; letter-spacing: 1px; margin-bottom: 0px; text-transform: uppercase; }
+    .header-center .subtitle { font-size: 0.65rem; color: var(--epi-yellow); letter-spacing: 1px; font-weight: bold; }
+    
+    .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .epi-logo-text { color: var(--epi-yellow); font-size: 1.4rem; font-weight: 900; font-style: italic; letter-spacing: -1px; line-height: 1; }
+    .login-info { font-size: 0.65rem; color: #aaa; text-transform: uppercase; }
+    .login-info span { color: var(--epi-yellow); font-weight: bold; }
+    .btn-logout { background: #ff4c4c; color: #fff; border: none; padding: 2px 10px; font-size: 0.7rem; font-weight: bold; border-radius: 3px; cursor: pointer; }
+
+    .filter-ribbon { background: #dce3e8; padding: 5px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex-shrink: 0; border-bottom: 1px solid #b0bec5; }
+    .filter-group { display: flex; align-items: center; gap: 6px; }
+    .filter-group label { font-size: 0.7rem; font-weight: 900; color: #111; text-transform: uppercase; }
+    .filter-group select, .filter-group input { background: transparent; border: none; color: #0056b3; font-weight: bold; font-size: 0.8rem; outline: none; cursor: pointer; }
+    .divider { width: 1px; height: 14px; background: #999; margin: 0 2px; }
+    .spacer { flex-grow: 1; }
+    .mode-selector { display: flex; align-items: center; gap: 6px; background: #fff; padding: 2px 8px; border-radius: 3px; border: 1px solid #ccc; }
+    .mode-selector label { color: #333; margin: 0; }
+    .mode-selector select { color: #000; font-size: 0.75rem; }
+    .date-range { display: flex; align-items: center; background: #333; border-radius: 3px; overflow: hidden; }
+    .date-range input { background: #333; color: #fff; border: none; padding: 4px 8px; font-size: 0.75rem; font-weight: bold; outline: none; cursor: pointer; }
+    .date-range input::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+    .date-range span { background: #111; color: #888; font-size: 0.65rem; font-weight: bold; padding: 4px 6px; }
+    .btn-action { background: #28a745; color: #fff; border: none; padding: 4px 12px; font-size: 0.75rem; font-weight: bold; border-radius: 3px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+
+    .summary-panel { background: var(--card); border-bottom: 1px solid var(--border); padding: 8px 20px; display: flex; gap: 20px; justify-content: space-around; flex-shrink: 0; }
+    .kpi-item { text-align: center; }
+    .kpi-lbl { font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: bold; }
+    .kpi-val { font-size: 1.2rem; font-weight: 900; color: #fff; margin-top: 0px; }
+
+    main { padding: 10px 20px; flex-grow: 1; display: grid; gap: 12px; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); min-height: 0; }
+    
+    .chart-box { background: var(--card); border: 1px solid var(--border); border-radius: 4px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+    .box-header { padding: 6px 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: #22252d; flex-shrink: 0; }
+    .box-title { font-size: 0.7rem; color: #ccc; text-transform: uppercase; font-weight: bold; }
+    .header-controls { display: flex; align-items: center; gap: 8px; }
+    .box-total { font-size: 0.7rem; font-weight: 900; color: var(--epi-yellow); background: rgba(255, 206, 0, 0.1); padding: 1px 6px; border-radius: 3px; border: 1px solid rgba(255, 206, 0, 0.3); }
+    .toggle-chart-btn { background: transparent; border: none; color: #666; cursor: pointer; font-size: 0.85rem; transition: 0.2s; }
+    .toggle-chart-btn:hover { color: var(--epi-yellow); }
+    
+    .box-body { padding: 8px; flex-grow: 1; display: flex; justify-content: center; align-items: center; position: relative; min-height: 0; }
+    canvas { width: 100% !important; height: 100% !important; }
+
+    .table-container { width: 100%; height: 100%; overflow-y: auto; overflow-x: hidden; padding-right: 4px; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.7rem; text-align: left; }
+    .data-table th { position: sticky; top: 0; background: #22252d; color: var(--epi-yellow); padding: 5px; font-weight: bold; text-transform: uppercase; z-index: 2; border-bottom: 1px solid #444; }
+    .data-table td { padding: 5px; border-bottom: 1px solid #333; color: #ddd; vertical-align: middle; }
+    .data-table tr:hover { background: rgba(255, 255, 255, 0.05); }
+    .type-badge { display: inline-block; background: #333; color: #aaa; padding: 1px 4px; border-radius: 2px; margin-bottom: 1px; font-size: 0.65rem; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--card); }
+    ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--epi-yellow); }
+
+    .mode-perf, .mode-cons, .mode-cost { display: none; }
+    body[data-mode="PERFORMANCE"] .mode-perf { display: flex; }
+    body[data-mode="CONSUMPTION"] .mode-cons { display: flex; }
+    body[data-mode="COSTING"] .mode-cost { display: flex; }
+
+    #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; color: var(--epi-yellow); font-weight: bold; display: none; }
+</style>
+</head>
+<body data-mode="PERFORMANCE">
+
+<div id="loader"><i class="fas fa-spinner fa-spin fa-2x" style="margin-bottom: 15px;"></i> Loading Vault Data...</div>
+
+<header class="command-header">
+    <div class="header-left">
+        <div class="active-pop-box">
+            <span class="ap-title">ACTIVE POPULATION</span>
+            <span class="ap-value" id="kpi-machines">0 <span>MACHINES</span></span>
+        </div>
+    </div>
+    <div class="header-center">
+        <h1>ROCKTOOL CONTRACT DASHBOARD</h1>
+        <div class="subtitle">BUILT TO TAKE ON ANY ROCK • TOOL CENTRE</div>
+    </div>
+    <div class="header-right">
+        <div class="epi-logo-text">Epiroc</div>
+        <div class="login-info">VERSION 2.0 | LOGGED IN: <span>HQ Admin</span></div>
+        <button class="btn-logout">LOG OUT</button>
+    </div>
+</header>
+
+<div class="filter-ribbon">
+    <div class="filter-group"><label>CUSTOMER</label><select id="flt-cust" onchange="updateSiteDropdown()"><option value="ALL">All</option></select></div>
+    <div class="divider"></div>
+    <div class="filter-group"><label>SITE</label><select id="flt-site" onchange="updateFleetDropdown()"><option value="ALL">All</option></select></div>
+    <div class="divider"></div>
+    <div class="filter-group"><label>FLEET</label><select id="flt-fleet" onchange="processData()"><option value="ALL">All</option></select></div>
+    <div class="divider"></div>
+    <div class="mode-selector">
+        <label>MODE</label>
+        <select id="flt-mode" onchange="switchMode()">
+            <option value="PERFORMANCE">PERFORMANCE</option>
+            <option value="CONSUMPTION">CONSUMPTION</option>
+            <option value="COSTING">COSTING</option>
+        </select>
+    </div>
+    <div class="spacer"></div>
+    <div class="date-range">
+        <input type="date" id="flt-date-from" onchange="processData()">
+        <span>TO</span>
+        <input type="date" id="flt-date-to" onchange="processData()">
+    </div>
+    <button class="btn-action" style="margin-left: 5px;" onclick="fetchData()"><i class="fas fa-sync"></i></button>
+</div>
+
+<div class="summary-panel">
+    <div class="kpi-item"><div class="kpi-lbl">Total Metres Drilled</div><div class="kpi-val" id="kpi-metres">0 M</div></div>
+    <div class="kpi-item"><div class="kpi-lbl">Total Rocktools Consumed</div><div class="kpi-val" id="kpi-parts">0 Qty</div></div>
+    <div class="kpi-item"><div class="kpi-lbl">Total Consumable Cost</div><div class="kpi-val" id="kpi-cost">₹ 0</div></div>
+    <div class="kpi-item" style="border-left: 2px solid var(--epi-yellow); padding-left: 20px;"><div class="kpi-lbl" style="color: var(--epi-yellow);">Cost Per Metre (CPM)</div><div class="kpi-val" id="kpi-cpm" style="color: var(--epi-yellow);">₹ 0.00</div></div>
+</div>
+
+<main id="dashboard-grid">
+    <div class="chart-box mode-perf"><div class="box-header"><div class="box-title">Face Drilling</div><div class="header-controls"><div class="box-total" id="tot-face">0 M</div><button class="toggle-chart-btn" onclick="toggleChartType('ch-face')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-face"></canvas></div></div>
+    <div class="chart-box mode-perf"><div class="box-header"><div class="box-title">Rock Bolt Drilling</div><div class="header-controls"><div class="box-total" id="tot-rb">0 M</div><button class="toggle-chart-btn" onclick="toggleChartType('ch-rb')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-rb"></canvas></div></div>
+    <div class="chart-box mode-perf"><div class="box-header"><div class="box-title">Production Drilling</div><div class="header-controls"><div class="box-total" id="tot-prod">0 M</div><button class="toggle-chart-btn" onclick="toggleChartType('ch-prod')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-prod"></canvas></div></div>
+    <div class="chart-box mode-perf"><div class="box-header"><div class="box-title">Reaming</div><div class="header-controls"><div class="box-total" id="tot-ream">0 M</div><button class="toggle-chart-btn" onclick="toggleChartType('ch-ream')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-ream"></canvas></div></div>
+    
+    <div class="chart-box mode-perf"><div class="box-header"><div class="box-title">Split Set</div><div class="header-controls"><div class="box-total" id="tot-split">0 M</div><button class="toggle-chart-btn" onclick="toggleChartType('ch-split')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-split"></canvas></div></div>
+    <div class="chart-box mode-perf"><div class="box-header"><div class="box-title">Daily Trend</div><div class="header-controls"><button class="toggle-chart-btn" onclick="toggleChartType('ch-trend')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-trend"></canvas></div></div>
+    <div class="chart-box mode-perf"><div class="box-header"><div class="box-title">Fleet Overview</div><div class="header-controls"><button class="toggle-chart-btn" onclick="toggleChartType('ch-overview')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-overview"></canvas></div></div>
+    <div class="chart-box mode-perf">
+        <div class="box-header"><div class="box-title">Fleet Summary</div></div>
+        <div class="box-body" style="padding: 0; display: block;">
+            <div class="table-container">
+                <table class="data-table" id="tbl-summary">
+                    <thead><tr><th>Fleet</th><th>Drill Type</th><th>Drill M</th><th>RDT</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="chart-box mode-cons"><div class="box-header"><div class="box-title">Buttonbits Consumed</div><div class="header-controls"><div class="box-total" id="tot-bb">0 Qty</div><button class="toggle-chart-btn" onclick="toggleChartType('ch-bb')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-bb"></canvas></div></div>
+    <div class="chart-box mode-cons"><div class="box-header"><div class="box-title">Drillrods Consumed</div><div class="header-controls"><div class="box-total" id="tot-dr">0 Qty</div><button class="toggle-chart-btn" onclick="toggleChartType('ch-dr')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-dr"></canvas></div></div>
+    <div class="chart-box mode-cons"><div class="box-header"><div class="box-title">Shankadapters Consumed</div><div class="header-controls"><div class="box-total" id="tot-sa">0 Qty</div><button class="toggle-chart-btn" onclick="toggleChartType('ch-sa')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-sa"></canvas></div></div>
+    <div class="chart-box mode-cons"><div class="box-header"><div class="box-title">Replacement Reasons</div><div class="header-controls"><div class="box-total" id="tot-reason-cons">0 Events</div><button class="toggle-chart-btn" onclick="toggleChartType('ch-reason-cons')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-reason-cons"></canvas></div></div>
+    
+    <div class="chart-box mode-cons"><div class="box-header"><div class="box-title">Avg Life (Metres/Part)</div><div class="header-controls"><button class="toggle-chart-btn" onclick="toggleChartType('ch-life')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-life"></canvas></div></div>
+    <div class="chart-box mode-cons"><div class="box-header"><div class="box-title">Avg Cost (₹/Part)</div><div class="header-controls"><button class="toggle-chart-btn" onclick="toggleChartType('ch-avg-cost')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-avg-cost"></canvas></div></div>
+    <div class="chart-box mode-cons"><div class="box-header"><div class="box-title">Cost Per Metre (CPM)</div><div class="header-controls"><button class="toggle-chart-btn" onclick="toggleChartType('ch-cpm-group')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-cpm-group"></canvas></div></div>
+    <div class="chart-box mode-cons">
+        <div class="box-header"><div class="box-title">Rocktool Performance</div></div>
+        <div class="box-body" style="padding: 0; display: block;">
+            <div class="table-container">
+                <table class="data-table" id="tbl-cons-summary">
+                    <thead><tr><th>Part Group</th><th>Qty</th><th>Life (M)</th><th>Avg Cost</th><th>CPM</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="chart-box mode-cost" style="grid-column: span 2;"><div class="box-header"><div class="box-title">Cost Breakdown by Machine</div><div class="header-controls"><div class="box-total" id="tot-fleet-cost">₹ 0</div><button class="toggle-chart-btn" onclick="toggleChartType('ch-fleet-cost')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-fleet-cost"></canvas></div></div>
+    <div class="chart-box mode-cost" style="grid-column: span 2;"><div class="box-header"><div class="box-title">Cost Per Metre (CPM) by Fleet</div><div class="header-controls"><button class="toggle-chart-btn" onclick="toggleChartType('ch-cpm-fleet')"><i class="fas fa-exchange-alt"></i></button></div></div><div class="box-body"><canvas id="ch-cpm-fleet"></canvas></div></div>
+</main>
+
+<script>
+Chart.register(ChartDataLabels);
+
+const PERF_APP_URL = "https://script.google.com/macros/s/AKfycbzLPst6bC2JxlF93mI04Lwt8YF18qSw2KRfzNgmT5XsqMEZ9VuC-5FbHJUjouks_HaqaA/exec"; 
+const CONS_APP_URL = "https://script.google.com/macros/s/AKfycbwnhqpKWtP7AdhT0NGIGwNIBWv3yTUU3jtXeD6QF-phPxe5ZKaGyw2RY5WBzezfefEp/exec";
+
+let dbPerf = [];
+let dbCons = [];
+let charts = {};
+let filterHierarchy = {}; 
+let chartTypeState = {}; 
+let currentChartData = {}; 
+
+function parseRowDate(val) {
+    if (!val) return new Date(NaN);
+    let s = String(val).trim();
+    
+    // Checks for strict DD/MM/YYYY or DD-MM-YYYY
+    let match = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+    if (match) {
+        return new Date(match[3], parseInt(match[2]) - 1, match[1]);
+    }
+    // Fallback for native formats (like DD-MMM-YYYY)
+    return new Date(s);
+}
+
+window.onload = () => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    document.getElementById('flt-date-from').valueAsDate = firstDay;
+    document.getElementById('flt-date-to').valueAsDate = now;
+    
+    Chart.defaults.color = '#888';
+    Chart.defaults.font.family = "'Segoe UI', sans-serif";
+    fetchData();
+};
+
+function switchMode() { document.body.setAttribute('data-mode', document.getElementById('flt-mode').value); }
+
+async function fetchData() {
+    document.getElementById('loader').style.display = 'flex';
+    try {
+        const payload = JSON.stringify({ action: "fetchDashboardData" });
+        const [perfRes, consRes] = await Promise.all([
+            fetch(PERF_APP_URL, { method: "POST", body: payload }).then(r => r.json()),
+            fetch(CONS_APP_URL, { method: "POST", body: payload }).then(r => r.json())
+        ]);
+        if (perfRes.status === "SUCCESS") dbPerf = perfRes.performance.data || [];
+        if (consRes.status === "SUCCESS") dbCons = consRes.consumption.data || [];
+        buildFilterHierarchy();
+        processData(); 
+    } catch (err) { alert("Network Error: " + err); }
+    document.getElementById('loader').style.display = 'none';
+}
+
+function buildFilterHierarchy() {
+    filterHierarchy = {};
+    dbPerf.forEach(r => {
+        let cust = r[2] ? String(r[2]).trim() : "Unknown";
+        let site = r[3] ? String(r[3]).trim() : "Unknown";
+        let fleet = r[4] ? String(r[4]).trim() : "Unknown";
+        if (!filterHierarchy[cust]) filterHierarchy[cust] = {};
+        if (!filterHierarchy[cust][site]) filterHierarchy[cust][site] = new Set();
+        filterHierarchy[cust][site].add(fleet);
+    });
+    dbCons.forEach(r => {
+        let cust = r[1] ? String(r[1]).trim() : "Unknown";
+        let site = r[2] ? String(r[2]).trim() : "Unknown";
+        let fleet = r[3] ? String(r[3]).trim() : "Unknown";
+        if (!filterHierarchy[cust]) filterHierarchy[cust] = {};
+        if (!filterHierarchy[cust][site]) filterHierarchy[cust][site] = new Set();
+        filterHierarchy[cust][site].add(fleet);
+    });
+
+    const custFilter = document.getElementById('flt-cust');
+    custFilter.innerHTML = '<option value="ALL">All</option>';
+    Object.keys(filterHierarchy).sort().forEach(c => custFilter.add(new Option(c, c)));
+    updateSiteDropdown();
+}
+
+function updateSiteDropdown() {
+    const selCust = document.getElementById('flt-cust').value;
+    const siteFilter = document.getElementById('flt-site');
+    siteFilter.innerHTML = '<option value="ALL">All</option>';
+    if (selCust === "ALL") {
+        let allSites = new Set();
+        Object.values(filterHierarchy).forEach(sitesObj => { Object.keys(sitesObj).forEach(s => allSites.add(s)); });
+        Array.from(allSites).sort().forEach(s => siteFilter.add(new Option(s, s)));
+    } else if (filterHierarchy[selCust]) {
+        Object.keys(filterHierarchy[selCust]).sort().forEach(s => siteFilter.add(new Option(s, s)));
+    }
+    updateFleetDropdown();
+}
+
+function updateFleetDropdown() {
+    const selCust = document.getElementById('flt-cust').value;
+    const selSite = document.getElementById('flt-site').value;
+    const fleetFilter = document.getElementById('flt-fleet');
+    fleetFilter.innerHTML = '<option value="ALL">All</option>';
+    let allowedFleets = new Set();
+
+    if (selCust === "ALL" && selSite === "ALL") {
+        Object.values(filterHierarchy).forEach(sitesObj => { Object.values(sitesObj).forEach(fleetSet => { fleetSet.forEach(f => allowedFleets.add(f)); }); });
+    } else if (selCust !== "ALL" && selSite === "ALL") {
+        Object.values(filterHierarchy[selCust]).forEach(fleetSet => { fleetSet.forEach(f => allowedFleets.add(f)); });
+    } else if (selCust !== "ALL" && selSite !== "ALL") {
+        if (filterHierarchy[selCust][selSite]) { filterHierarchy[selCust][selSite].forEach(f => allowedFleets.add(f)); }
+    }
+    Array.from(allowedFleets).sort().forEach(f => fleetFilter.add(new Option(f, f)));
+    processData();
+}
+
+function processData() {
+    const selCust = document.getElementById('flt-cust').value;
+    const selSite = document.getElementById('flt-site').value;
+    const selFleet = document.getElementById('flt-fleet').value;
+    
+    const fromDate = new Date(document.getElementById('flt-date-from').value || '1900-01-01');
+    const toDate = new Date(document.getElementById('flt-date-to').value || '2100-01-01');
+    toDate.setHours(23, 59, 59); 
+
+    let activeMachines = new Set();
+    
+    let pData = dbPerf.filter(row => {
+        let rDate = parseRowDate(row[1]); 
+        if (isNaN(rDate.getTime())) return false;
+        let cMatch = selCust === "ALL" || String(row[2]).trim() === selCust;
+        let sMatch = selSite === "ALL" || String(row[3]).trim() === selSite;
+        let fMatch = selFleet === "ALL" || String(row[4]).trim() === selFleet;
+        if (rDate >= fromDate && rDate <= toDate && cMatch && sMatch && fMatch) { activeMachines.add(String(row[4]).trim()); return true; } return false;
+    });
+
+    let cData = dbCons.filter(row => {
+        let rDate = parseRowDate(row[4]); 
+        if (isNaN(rDate.getTime())) return false;
+        let cMatch = selCust === "ALL" || String(row[1]).trim() === selCust;
+        let sMatch = selSite === "ALL" || String(row[2]).trim() === selSite;
+        let fMatch = selFleet === "ALL" || String(row[3]).trim() === selFleet;
+        if (rDate >= fromDate && rDate <= toDate && cMatch && sMatch && fMatch) { activeMachines.add(String(row[3]).trim()); return true; } return false;
+    });
+
+    let tMetres = 0, tParts = 0, tCost = 0;
+    
+    let faceData = {}, rbData = {}, prodData = {}, reamData = {}, splitData = {}, fleetMetres = {}, dailyTrend = {}, perfTableMap = {}; 
+    let bbData = {}, drData = {}, saData = {}, reasonData = {}, fleetCost = {};
+    let groupStats = {}; 
+
+    function addVal(obj, key, val) { if (key && !isNaN(val)) obj[key] = (obj[key] || 0) + parseFloat(val); }
+
+    pData.forEach(r => {
+        const fleet = String(r[4]).trim();
+        const m = parseFloat(r[9]) || 0; 
+        // Force the date strings to appear correctly mapped on the X Axis
+        const dateKey = parseRowDate(r[1]).toLocaleDateString('en-GB'); 
+
+        tMetres += m;
+        addVal(fleetMetres, fleet, m);
+        addVal(dailyTrend, dateKey, m);
+
+        if(!perfTableMap[fleet]) perfTableMap[fleet] = { types: {}, rdt: 0 };
+        function mapDrill(typeStr, colIdx) { let v = parseFloat(r[colIdx])||0; if(v>0) addVal(perfTableMap[fleet].types, typeStr, v); return v; }
+
+        addVal(faceData, "Face Drilling - 4.3/45mm", mapDrill("Face 4.3", 14));
+        addVal(faceData, "Face Drilling - 4.9/45mm", mapDrill("Face 4.9", 18));
+        addVal(faceData, "Face Drilling - 5.5/48mm", mapDrill("Face 5.5", 22));
+
+        addVal(rbData, "Rock bolt Drilling - 2.8/33mm", mapDrill("Rockbolt 2.8", 26));
+        addVal(rbData, "Rock bolt Drilling - 2.1/33mm", mapDrill("Rockbolt 2.1", 30));
+
+        addVal(prodData, "Production Drilling", mapDrill("Production", 34));
+
+        addVal(reamData, "Reaming - 4.3/102mm", mapDrill("Reaming 4.3", 38));
+        addVal(reamData, "Reaming - 4.9/102mm", mapDrill("Reaming 4.9", 42));
+        addVal(reamData, "Reaming - 5.5/102mm", mapDrill("Reaming 5.5", 46));
+
+        addVal(splitData, "Split Set Drilling", mapDrill("Split Set", 50));
+    });
+
+    cData.forEach(r => {
+        const fleet = String(r[3]).trim(); 
+        const type = String(r[7] || "Other").trim();  
+        const desc = String(r[8] || type).trim();
+        const reason = String(r[12]).trim(); 
+        const qty = parseFloat(r[10]) || 0; 
+        const cost = qty * (parseFloat(r[11]) || 0);
+        
+        tParts += qty; tCost += cost;
+
+        let tLow = type.toLowerCase();
+        let dLow = desc.toLowerCase();
+        if (tLow.includes('button') || tLow.includes('bit') || dLow.includes('bit')) { addVal(bbData, desc, qty); } 
+        else if (tLow.includes('rod') || tLow.includes('tube') || dLow.includes('rod')) { addVal(drData, desc, qty); } 
+        else if (tLow.includes('shank') || dLow.includes('shank')) { addVal(saData, desc, qty); }
+
+        if (reason) addVal(reasonData, reason, qty);
+        addVal(fleetCost, fleet, cost);
+        if(perfTableMap[fleet]) perfTableMap[fleet].rdt += qty;
+
+        if (!groupStats[type]) groupStats[type] = { qty: 0, cost: 0 };
+        groupStats[type].qty += qty;
+        groupStats[type].cost += cost;
+    });
+
+    document.getElementById('kpi-machines').innerHTML = activeMachines.size + " <span>MACHINES</span>";
+    document.getElementById('kpi-metres').innerText = tMetres.toLocaleString(undefined, {maximumFractionDigits: 1}) + " M";
+    document.getElementById('kpi-parts').innerText = tParts.toLocaleString() + " Qty";
+    document.getElementById('kpi-cost').innerText = "₹ " + tCost.toLocaleString(undefined, {maximumFractionDigits: 0});
+    document.getElementById('kpi-cpm').innerText = "₹ " + (tMetres > 0 ? (tCost / tMetres) : 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    drawChart('ch-face', faceData, 'tot-face', '#FFCE00');
+    drawChart('ch-rb', rbData, 'tot-rb', '#FFCE00');
+    drawChart('ch-prod', prodData, 'tot-prod', '#FFCE00');
+    drawChart('ch-ream', reamData, 'tot-ream', '#FFCE00');
+    drawChart('ch-split', splitData, 'tot-split', '#FFCE00');
+    
+    // Specifically mapping daily dates to the Daily Trend box
+    let sortedTrend = {};
+    Object.keys(dailyTrend).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-'))).forEach(k => sortedTrend[k] = dailyTrend[k]);
+    drawChart('ch-trend', sortedTrend, null, '#03A9F4');
+    drawChart('ch-overview', fleetMetres, null, '#8BC34A');
+
+    drawChart('ch-bb', bbData, 'tot-bb', '#00E676');
+    drawChart('ch-dr', drData, 'tot-dr', '#00E676');
+    drawChart('ch-sa', saData, 'tot-sa', '#00E676');
+    drawChart('ch-reason-cons', reasonData, 'tot-reason-cons', '#F44336');
+
+    let lifeData = {}, avgCostData = {}, cpmGroupData = {};
+    Object.keys(groupStats).forEach(g => {
+        let st = groupStats[g];
+        if (st.qty > 0) {
+            avgCostData[g] = st.cost / st.qty;
+            if (tMetres > 0) {
+                lifeData[g] = tMetres / st.qty;
+                cpmGroupData[g] = st.cost / tMetres;
+            }
+        }
+    });
+
+    drawChart('ch-life', lifeData, null, '#03A9F4');
+    drawChart('ch-avg-cost', avgCostData, null, '#FF9800');
+    drawChart('ch-cpm-group', cpmGroupData, null, '#E91E63');
+    drawChart('ch-fleet-cost', fleetCost, 'tot-fleet-cost', '#03A9F4');
+
+    let cpmFleetData = {};
+    Object.keys(fleetCost).forEach(f => { if (fleetMetres[f] && fleetMetres[f] > 0) cpmFleetData[f] = fleetCost[f] / fleetMetres[f]; });
+    drawChart('ch-cpm-fleet', cpmFleetData, null, '#E91E63');
+
+    const tbodyP = document.querySelector('#tbl-summary tbody');
+    tbodyP.innerHTML = "";
+    Object.keys(perfTableMap).sort().forEach(f => {
+        let entry = perfTableMap[f];
+        let tKeys = Object.keys(entry.types);
+        if (tKeys.length === 0 && entry.rdt === 0) return; 
+        let tHtml = tKeys.map(k => `<span class="type-badge">${k}</span>`).join(' ');
+        let totM = tKeys.reduce((sum, k) => sum + entry.types[k], 0);
+        tbodyP.innerHTML += `<tr><td style="color:var(--epi-yellow); font-weight:bold;">${f}</td><td>${tHtml || '-'}</td><td style="font-weight:bold;">${totM.toFixed(1)}</td><td style="color:#00E676; font-weight:bold;">${entry.rdt}</td></tr>`;
+    });
+
+    const tbodyC = document.querySelector('#tbl-cons-summary tbody');
+    tbodyC.innerHTML = "";
+    Object.keys(groupStats).sort().forEach(g => {
+        let st = groupStats[g];
+        if (st.qty === 0) return;
+        let aLife = tMetres > 0 ? (tMetres / st.qty) : 0;
+        let aCost = st.cost / st.qty;
+        let cpm = tMetres > 0 ? (st.cost / tMetres) : 0;
+        tbodyC.innerHTML += `<tr><td style="color:var(--epi-yellow); font-weight:bold;">${g}</td><td style="font-weight:bold;">${st.qty}</td><td style="color:#03A9F4; font-weight:bold;">${aLife.toFixed(1)}</td><td style="color:#FF9800; font-weight:bold;">₹${aCost.toFixed(0)}</td><td style="color:#E91E63; font-weight:bold;">₹${cpm.toFixed(2)}</td></tr>`;
+    });
+}
+
+window.toggleChartType = function(canvasId) {
+    chartTypeState[canvasId] = chartTypeState[canvasId] === 'line' ? 'bar' : 'line';
+    const cache = currentChartData[canvasId];
+    if(cache) drawChart(canvasId, cache.dataObj, cache.totalId, cache.colorCode);
+}
+
+// 🚨 THE FORCED VERTICAL RENDER ENGINE 🚨
+function drawChart(canvasId, dataObj, totalId, colorCode) {
+    currentChartData[canvasId] = { dataObj, totalId, colorCode };
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    if (charts[canvasId]) charts[canvasId].destroy();
+
+    if (!dataObj || Object.keys(dataObj).length === 0) {
+        if(totalId) document.getElementById(totalId).innerText = "0";
+        return; 
+    }
+
+    const sortedKeys = Object.keys(dataObj).filter(k => dataObj[k] > 0).sort((a,b) => dataObj[b] - dataObj[a]).slice(0, 10); 
+    const values = sortedKeys.map(k => dataObj[k]);
+    if (totalId) document.getElementById(totalId).innerText = values.reduce((a,b)=>a+b, 0).toLocaleString(undefined, {maximumFractionDigits: 1});
+
+    const type = chartTypeState[canvasId] || 'bar';
+
+    charts[canvasId] = new Chart(ctx, {
+        type: type,
+        data: {
+            labels: sortedKeys, // These labels will populate the X-Axis
+            datasets: [{
+                data: values,
+                backgroundColor: type === 'line' ? colorCode + '20' : colorCode,
+                borderColor: colorCode,
+                borderWidth: type === 'line' ? 3 : 0,
+                borderRadius: type === 'bar' ? 3 : 0,
+                pointRadius: type === 'line' ? 5 : 0,            
+                pointBackgroundColor: '#ffffff',
+                pointBorderWidth: 2,
+                fill: type === 'line',
+                tension: 0.2 
+            }]
+        },
+        options: {
+            indexAxis: 'x', // <--- GUARANTEES VERTICAL COLUMNS
+            layout: { padding: { top: 25, right: 10, left: 10, bottom: 0 } }, 
+            responsive: true, 
+            maintainAspectRatio: false,
+            plugins: { 
+                legend: { display: false },
+                tooltip: { enabled: true },
+                datalabels: {
+                    color: '#fff',
+                    font: { weight: 'bold', size: 9 },
+                    align: 'top', 
+                    anchor: 'end',
+                    formatter: function(val) { return val > 0 ? Number(val).toLocaleString(undefined, {maximumFractionDigits: 1}) : ''; }
+                }
+            },
+            scales: { 
+                x: { 
+                    grid: { display: false }, 
+                    ticks: { color: '#ccc', font: { size: 9 }, maxRotation: 45, minRotation: 0, autoSkip: false } // Forces labels to show
+                }, 
+                y: { 
+                    grid: { color: '#333' }, 
+                    ticks: { display: false }, 
+                    beginAtZero: true, 
+                    grace: '15%' 
+                } 
+            }
+        }
+    });
+}
+</script>
+</body>
+</html>
