@@ -21,7 +21,7 @@
 
     /* --- LOGIN & MODAL OVERLAY CSS --- */
     .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; justify-content: center; align-items: center; }
-    .box-container { background: var(--card); padding: 30px; border-radius: 8px; border-top: 5px solid var(--epi-yellow); width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .box-container { background: var(--card); padding: 30px; border-radius: 8px; border-top: 5px solid var(--epi-yellow); width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 95vh; display: flex; flex-direction: column; }
     
     .login-logo { color: var(--epi-yellow); font-size: 2.5rem; font-weight: 900; font-style: italic; letter-spacing: -1px; margin-bottom: 5px; text-align: center; }
     .login-subtitle { font-size: 0.8rem; color: #888; letter-spacing: 2px; margin-bottom: 30px; text-align: center;}
@@ -107,6 +107,9 @@
 
     /* Custom Labels for Export Modal */
     .exp-label { font-size: 0.7rem; color: var(--epi-yellow); text-transform: uppercase; font-weight: bold; margin-bottom: 3px; display: block; }
+    .chk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #111; padding: 10px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 15px; overflow-y: auto; }
+    .chk-item { font-size: 0.75rem; color: #ccc; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .chk-item input { cursor: pointer; accent-color: var(--epi-yellow); }
 </style>
 </head>
 <body data-mode="PERFORMANCE">
@@ -123,31 +126,56 @@
 </div>
 
 <div id="export-overlay" class="overlay" style="display: none;">
-    <div class="box-container" style="width: 450px;">
+    <div class="box-container" style="width: 480px;">
         <h2 style="color: var(--epi-yellow); margin-bottom: 5px; text-transform: uppercase; font-size: 1.2rem;"><i class="fas fa-download"></i> Export Report</h2>
-        <p style="color: #888; font-size: 0.8rem; margin-bottom: 20px;">Select your export criteria below. This will not affect your active dashboard view.</p>
+        <p style="color: #888; font-size: 0.8rem; margin-bottom: 15px;">Configure your export criteria and required columns.</p>
         
-        <label class="exp-label">Customer</label>
-        <select id="exp-cust" class="input-field" onchange="updateExpSite()"></select>
-        
-        <label class="exp-label">Site</label>
-        <select id="exp-site" class="input-field" onchange="updateExpFleet()"></select>
-        
-        <label class="exp-label">Fleet Asset</label>
-        <select id="exp-fleet" class="input-field"></select>
-        
-        <div style="display: flex; gap: 15px;">
-            <div style="flex: 1;">
-                <label class="exp-label">From Date</label>
-                <input type="date" id="exp-date-from" class="input-field">
+        <div style="overflow-y: auto; padding-right: 5px; flex-grow: 1;">
+            <label class="exp-label">Customer</label>
+            <select id="exp-cust" class="input-field" style="margin-bottom: 10px;" onchange="updateExpSite()"></select>
+            
+            <label class="exp-label">Site</label>
+            <select id="exp-site" class="input-field" style="margin-bottom: 10px;" onchange="updateExpFleet()"></select>
+            
+            <label class="exp-label">Fleet Asset</label>
+            <select id="exp-fleet" class="input-field" style="margin-bottom: 10px;"></select>
+            
+            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
+                <div style="flex: 1;">
+                    <label class="exp-label">From Date</label>
+                    <input type="date" id="exp-date-from" class="input-field" style="margin-bottom: 0;">
+                </div>
+                <div style="flex: 1;">
+                    <label class="exp-label">To Date</label>
+                    <input type="date" id="exp-date-to" class="input-field" style="margin-bottom: 0;">
+                </div>
             </div>
-            <div style="flex: 1;">
-                <label class="exp-label">To Date</label>
-                <input type="date" id="exp-date-to" class="input-field">
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+                <label class="exp-label" style="margin: 0;">Select Hole Types to Export</label>
+                <div>
+                    <button type="button" onclick="toggleAllChecks(true)" style="background: none; border: none; color: #00E676; font-size: 0.65rem; cursor: pointer; font-weight: bold;">ALL</button> |
+                    <button type="button" onclick="toggleAllChecks(false)" style="background: none; border: none; color: #ff4c4c; font-size: 0.65rem; cursor: pointer; font-weight: bold;">NONE</button>
+                </div>
+            </div>
+            
+            <div class="chk-grid" id="hole-check-container">
+                <label class="chk-item"><input type="checkbox" class="hole-chk" value="12" data-lbl="Face Drilling - 4.3/45mm" data-short="Face 4.3" checked> Face 4.3 / 45mm</label>
+                <label class="chk-item"><input type="checkbox" class="hole-chk" value="16" data-lbl="Face Drilling - 4.9/45mm" data-short="Face 4.9" checked> Face 4.9 / 45mm</label>
+                <label class="chk-item"><input type="checkbox" class="hole-chk" value="20" data-lbl="Face Drilling - 5.5/48mm" data-short="Face 5.5" checked> Face 5.5 / 48mm</label>
+                <label class="chk-item"><input type="checkbox" class="hole-chk" value="24" data-lbl="Rock bolt Drilling -2.8/ 33mm" data-short="RB 2.8" checked> Rock bolt 2.8 / 33mm</label>
+                <label class="chk-item"><input type="checkbox" class="hole-chk" value="28" data-lbl="Rock bolt Drilling -2.1/ 33mm" data-short="RB 2.1" checked> Rock bolt 2.1 / 33mm</label>
+                <label class="chk-item"><input type="checkbox" class="hole-chk" value="32" data-lbl="Production Drilling" data-short="Prod" checked> Production Drilling</label>
+                <label class="chk-item"><input type="checkbox" class="hole-chk" value="36" data-lbl="Reaming - 4.3/102mm" data-short="Ream 4.3" checked> Reaming 4.3 / 102mm</label>
+                <label class="chk-item"><input type="checkbox" class="hole-chk" value="40" data-lbl="Reaming - 4.9/102mm" data-short="Ream 4.9" checked> Reaming 4.9 / 102mm</label>
+                <label class="chk-item"><input type="checkbox" class="hole-chk" value="44" data-lbl="Reaming - 5.5/102mm" data-short="Ream 5.5" checked> Reaming 5.5 / 102mm</label>
+                <label class="chk-item"><input type="checkbox" class="hole-chk" value="48" data-lbl="Split Set Drilling - 2.8/ 33" data-short="Split 2.8" checked> Split Set 2.8 / 33</label>
+                <label class="chk-item"><input type="checkbox" class="hole-chk" value="52" data-lbl="Split Set Drilling - 2.1/ 33" data-short="Split 2.1" checked> Split Set 2.1 / 33</label>
+                <label class="chk-item"><input type="checkbox" class="hole-chk" value="56" data-lbl="Scaling - 10 /64" data-short="Scal 10/64" checked> Scaling 10 / 64</label>
             </div>
         </div>
 
-        <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
             <button class="btn-main" style="background: transparent; color: #fff; border: 1px solid #444;" onclick="document.getElementById('export-overlay').style.display='none'">CANCEL</button>
             <button class="btn-main" style="background: #1D6F42; color: #fff;" onclick="exportExcel()"><i class="fas fa-file-excel"></i> EXCEL</button>
             <button class="btn-main" style="background: #F40F02; color: #fff;" onclick="exportPDF()"><i class="fas fa-file-pdf"></i> PDF</button>
@@ -404,6 +432,25 @@ function openExportMenu() {
     document.getElementById('export-overlay').style.display = 'flex';
 }
 
+function toggleAllChecks(state) {
+    document.querySelectorAll('.hole-chk').forEach(chk => chk.checked = state);
+}
+
+function getSelectedHoles() {
+    const checkboxes = document.querySelectorAll('.hole-chk');
+    let configs = [];
+    checkboxes.forEach(chk => {
+        if (chk.checked) {
+            configs.push({
+                dataIndex: parseInt(chk.value),
+                label: chk.getAttribute('data-lbl'),
+                short: chk.getAttribute('data-short')
+            });
+        }
+    });
+    return configs;
+}
+
 function updateExpSite() {
     const selCust = document.getElementById('exp-cust').value;
     const siteFilter = document.getElementById('exp-site');
@@ -435,7 +482,6 @@ function updateExpFleet() {
     Array.from(allowedFleets).sort().forEach(f => fleetFilter.add(new Option(f, f)));
 }
 
-// Independent data fetcher specifically for the Export Modal inputs
 function getExportData() {
     const selCust = document.getElementById('exp-cust').value;
     const selSite = document.getElementById('exp-site').value;
@@ -670,11 +716,14 @@ function drawChart(canvasId, dataObj, totalId, colorCode) {
 }
 
 // ==========================================
-// 🚨 EXCEL EXPORT ENGINE (WITH CONDITIONAL HIGHLIGHTING) 🚨
+// 🚨 DYNAMIC EXCEL EXPORT ENGINE 🚨
 // ==========================================
 async function exportExcel() {
-    const data = getExportData(); // Reads from Export Modal!
+    const data = getExportData(); 
+    const selectedHoles = getSelectedHoles();
+    
     if (data.length === 0) return alert("No data available to export based on selected criteria.");
+    if (selectedHoles.length === 0) return alert("Please select at least one hole type to export.");
 
     const selFleet = document.getElementById('exp-fleet').value;
     const dateRange = document.getElementById('exp-date-from').value + " TO " + document.getElementById('exp-date-to').value;
@@ -688,46 +737,46 @@ async function exportExcel() {
     ws.addRow(["Month", dateRange]);
     ws.addRow([]);
     
-    ws.addRow(["Date", "Shift", "Location / Loc", "Machine Status", "Total Metres", "Total Holes",
-         "Face Drilling - 4.3/45mm", "", "", "Face Drilling - 4.9/45mm", "", "", "Face Drilling - 5.5/48mm", "", "",
-         "Rock bolt Drilling -2.8/ 33mm", "", "", "Rock bolt Drilling -2.1/ 33mm", "", "",
-         "Production Drilling", "", "",
-         "Reaming - 4.3/102mm", "", "", "Reaming - 4.9/102mm", "", "", "Reaming - 5.5/102mm", "", "",
-         "Split Set Drilling - 2.8/ 33", "", "", "Split Set Drilling - 2.1/ 33", "", "",
-         "Scaling - 10 /64", "", ""]);
-    
-    ws.addRow(["", "", "", "", "", "",
-         "No of Holes", "Length of Holes", "Total Drilling", "No of Holes", "Length of Holes", "Total Drilling", "No of Holes", "Length of Holes", "Total Drilling",
-         "No of Holes", "Length of Holes", "Total Drilling", "No of Holes", "Length of Holes", "Total Drilling",
-         "No of Holes", "Length of Holes", "Total Drilling",
-         "No of Holes", "Length of Holes", "Total Drilling", "No of Holes", "Length of Holes", "Total Drilling", "No of Holes", "Length of Holes", "Total Drilling",
-         "No of Holes", "Length of Holes", "Total Drilling", "No of Holes", "Length of Holes", "Total Drilling",
-         "No of Holes", "Length of Holes", "Total Drilling"]);
+    // Build Dynamic Headers
+    let header1 = ["Date", "Shift", "Location / Loc", "Machine Status", "Total Metres", "Total Holes"];
+    let header2 = ["", "", "", "", "", ""];
 
-    const merges = ['G6:I6', 'J6:L6', 'M6:O6', 'P6:R6', 'S6:U6', 'V6:X6', 'Y6:AA6', 'AB6:AD6', 'AE6:AG6', 'AH6:AJ6', 'AK6:AM6', 'AN6:AP6'];
-    merges.forEach(range => ws.mergeCells(range));
+    selectedHoles.forEach(h => {
+        header1.push(h.label, "", "");
+        header2.push("No of Holes", "Length of Holes", "Total Drilling");
+    });
+
+    ws.addRow(header1);
+    ws.addRow(header2);
+
+    // Apply Dynamic Merges
+    let colStart = 7;
+    selectedHoles.forEach(h => {
+        ws.mergeCells(6, colStart, 6, colStart + 2);
+        colStart += 3;
+    });
 
     for(let i=1; i<=7; i++) ws.getRow(i).font = { bold: true };
 
+    // Inject Dynamic Data Rows
     data.forEach(r => {
-        ws.addRow([
-            parseRowDate(r[1]).toLocaleDateString('en-GB'), r[5] || "", r[7] || "", r[8] || "", r[9] || 0, r[10] || 0,
-            r[12] || "", r[13] || "", r[14] || "", r[16] || "", r[17] || "", r[18] || "", r[20] || "", r[21] || "", r[22] || "",
-            r[24] || "", r[25] || "", r[26] || "", r[28] || "", r[29] || "", r[30] || "",
-            r[32] || "", r[33] || "", r[34] || "",
-            r[36] || "", r[37] || "", r[38] || "", r[40] || "", r[41] || "", r[42] || "", r[44] || "", r[45] || "", r[46] || "",
-            r[48] || "", r[49] || "", r[50] || "", r[52] || "", r[53] || "", r[54] || "",
-            r[56] || "", r[57] || "", r[58] || ""
-        ]);
+        let row = [
+            parseRowDate(r[1]).toLocaleDateString('en-GB'), r[5] || "", r[7] || "", r[8] || "", r[9] || 0, r[10] || 0
+        ];
+        selectedHoles.forEach(h => {
+            row.push(r[h.dataIndex] || "", r[h.dataIndex + 1] || "", r[h.dataIndex + 2] || "");
+        });
+        ws.addRow(row);
     });
 
-    // --- APPLY CONDITIONAL FORMATTING ---
+    // Apply Conditional Formatting
     ws.eachRow((row, rowNumber) => {
         if (rowNumber > 7) { 
             let statusStr = String(row.getCell(4).value || "").toLowerCase();
             let isNoDrilling = statusStr.includes('no') || statusStr.includes('idle') || statusStr.includes('bd') || statusStr.includes('break') || statusStr.includes('service');
 
-            for (let col = 7; col <= 42; col++) {
+            let endCol = 6 + (selectedHoles.length * 3);
+            for (let col = 7; col <= endCol; col++) {
                 let cell = row.getCell(col);
                 let val = cell.value;
 
@@ -744,18 +793,23 @@ async function exportExcel() {
 
     const buffer = await wb.xlsx.writeBuffer();
     saveAs(new Blob([buffer], { type: "application/octet-stream" }), "Epiroc_DPR_Report.xlsx");
-    document.getElementById('export-overlay').style.display = 'none'; // Close modal
+    document.getElementById('export-overlay').style.display = 'none'; 
 }
 
 // ==========================================
-// 🚨 PDF EXPORT ENGINE (WITH CONDITIONAL FORMATTING) 🚨
+// 🚨 DYNAMIC PDF EXPORT ENGINE 🚨
 // ==========================================
 function exportPDF() {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('landscape', 'pt', 'a2');
-    const data = getExportData(); // Reads from Export Modal!
+    const data = getExportData(); 
+    const selectedHoles = getSelectedHoles();
     
     if (data.length === 0) return alert("No data available to export based on selected criteria.");
+    if (selectedHoles.length === 0) return alert("Please select at least one hole type to export.");
+
+    // Dynamically adjust page orientation based on how many columns are selected
+    const orientation = selectedHoles.length > 5 ? 'landscape' : 'portrait';
+    const doc = new jsPDF(orientation, 'pt', 'a2');
 
     const selFleet = document.getElementById('exp-fleet').value;
     const dateRange = document.getElementById('exp-date-from').value + " TO " + document.getElementById('exp-date-to').value;
@@ -766,33 +820,29 @@ function exportPDF() {
     doc.text(`Machine Sl.No: ${selFleet === "ALL" ? "All Fleets" : selFleet}`, 40, 65);
     doc.text(`Date Range: ${dateRange}`, 40, 85);
 
-    const headers = [[
-        { content: 'Date', rowSpan: 2 }, { content: 'Shift', rowSpan: 2 }, { content: 'Location', rowSpan: 2 }, { content: 'Status', rowSpan: 2 }, { content: 'Tot Metres', rowSpan: 2 }, { content: 'Tot Holes', rowSpan: 2 },
-        { content: 'Face 4.3', colSpan: 3, styles: {halign: 'center'} }, { content: 'Face 4.9', colSpan: 3, styles: {halign: 'center'} }, { content: 'Face 5.5', colSpan: 3, styles: {halign: 'center'} },
-        { content: 'RB 2.8', colSpan: 3, styles: {halign: 'center'} }, { content: 'RB 2.1', colSpan: 3, styles: {halign: 'center'} },
-        { content: 'Prod', colSpan: 3, styles: {halign: 'center'} },
-        { content: 'Ream 4.3', colSpan: 3, styles: {halign: 'center'} }, { content: 'Ream 4.9', colSpan: 3, styles: {halign: 'center'} }, { content: 'Ream 5.5', colSpan: 3, styles: {halign: 'center'} },
-        { content: 'Split 2.8', colSpan: 3, styles: {halign: 'center'} }, { content: 'Split 2.1', colSpan: 3, styles: {halign: 'center'} },
-        { content: 'Scal 10/64', colSpan: 3, styles: {halign: 'center'} }
-    ], [
-        'Holes', 'Len', 'Tot', 'Holes', 'Len', 'Tot', 'Holes', 'Len', 'Tot',
-        'Holes', 'Len', 'Tot', 'Holes', 'Len', 'Tot',
-        'Holes', 'Len', 'Tot',
-        'Holes', 'Len', 'Tot', 'Holes', 'Len', 'Tot', 'Holes', 'Len', 'Tot',
-        'Holes', 'Len', 'Tot', 'Holes', 'Len', 'Tot',
-        'Holes', 'Len', 'Tot'
-    ]];
+    // Build Dynamic Headers
+    let head1 = [
+        { content: 'Date', rowSpan: 2 }, { content: 'Shift', rowSpan: 2 }, { content: 'Location', rowSpan: 2 }, 
+        { content: 'Status', rowSpan: 2 }, { content: 'Tot Metres', rowSpan: 2 }, { content: 'Tot Holes', rowSpan: 2 }
+    ];
+    let head2 = [];
 
+    selectedHoles.forEach(h => {
+        head1.push({ content: h.short, colSpan: 3, styles: {halign: 'center'} });
+        head2.push('Holes', 'Len', 'Tot');
+    });
+
+    const headers = [head1, head2];
+
+    // Build Dynamic Rows
     const rows = data.map(r => {
-        return [
-            parseRowDate(r[1]).toLocaleDateString('en-GB'), r[5] || "", r[7] || "", r[8] || "", r[9] || 0, r[10] || 0,
-            r[12] || "", r[13] || "", r[14] || "", r[16] || "", r[17] || "", r[18] || "", r[20] || "", r[21] || "", r[22] || "",
-            r[24] || "", r[25] || "", r[26] || "", r[28] || "", r[29] || "", r[30] || "",
-            r[32] || "", r[33] || "", r[34] || "",
-            r[36] || "", r[37] || "", r[38] || "", r[40] || "", r[41] || "", r[42] || "", r[44] || "", r[45] || "", r[46] || "",
-            r[48] || "", r[49] || "", r[50] || "", r[52] || "", r[53] || "", r[54] || "",
-            r[56] || "", r[57] || "", r[58] || ""
+        let row = [
+            parseRowDate(r[1]).toLocaleDateString('en-GB'), r[5] || "", r[7] || "", r[8] || "", r[9] || 0, r[10] || 0
         ];
+        selectedHoles.forEach(h => {
+            row.push(r[h.dataIndex] || "", r[h.dataIndex + 1] || "", r[h.dataIndex + 2] || "");
+        });
+        return row;
     });
 
     doc.autoTable({
@@ -804,7 +854,6 @@ function exportPDF() {
         headStyles: { fillColor: [34, 37, 45], textColor: [255, 206, 0] },
         alternateRowStyles: { fillColor: [245, 245, 245] },
         
-        // --- CONDITIONAL FORMATTING ---
         didParseCell: function(data) {
             if (data.section === 'body' && data.column.index >= 6) { 
                 let statusStr = String(data.row.raw[3] || "").toLowerCase();
@@ -821,7 +870,7 @@ function exportPDF() {
     });
 
     doc.save('Epiroc_DPR_Report.pdf');
-    document.getElementById('export-overlay').style.display = 'none'; // Close modal
+    document.getElementById('export-overlay').style.display = 'none'; 
 }
 </script>
 </body>
