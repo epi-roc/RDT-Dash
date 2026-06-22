@@ -19,7 +19,6 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     body { background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
 
-    /* --- LOGIN & MODAL OVERLAY CSS --- */
     .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; justify-content: center; align-items: center; }
     .box-container { background: var(--card); padding: 30px; border-radius: 8px; border-top: 5px solid var(--epi-yellow); width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 95vh; display: flex; flex-direction: column; }
     
@@ -57,7 +56,7 @@
     .spacer { flex-grow: 1; }
     .mode-selector { display: flex; align-items: center; gap: 6px; background: #fff; padding: 2px 8px; border-radius: 3px; border: 1px solid #ccc; }
     .mode-selector label { color: #333; margin: 0; }
-    .mode-selector select { color: #000; font-size: 0.75rem; }
+    .mode-selector select { color: #000; font-size: 0.75rem; font-weight: bold;}
     .date-range { display: flex; align-items: center; background: #333; border-radius: 3px; overflow: hidden; }
     .date-range input { background: #333; color: #fff; border: none; padding: 4px 8px; font-size: 0.75rem; font-weight: bold; outline: none; cursor: pointer; }
     .date-range input::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
@@ -65,14 +64,19 @@
     .btn-action { background: #28a745; color: #fff; border: none; padding: 4px 12px; font-size: 0.75rem; font-weight: bold; border-radius: 3px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: 0.2s;}
     .btn-action:hover { opacity: 0.8; }
     
-    /* Dedicated Export Button */
     .btn-export-menu { background: #1a1a1a; color: var(--epi-yellow); border: 1px solid var(--border); padding: 5px 15px; font-weight: 900; font-size: 0.8rem; border-radius: 4px; cursor: pointer; }
     .btn-export-menu:hover { background: #333; }
 
-    .summary-panel { background: var(--card); border-bottom: 1px solid var(--border); padding: 8px 20px; display: flex; gap: 20px; justify-content: space-around; flex-shrink: 0; }
-    .kpi-item { text-align: center; }
+    .summary-panel { background: var(--card); border-bottom: 1px solid var(--border); padding: 8px 20px; display: flex; gap: 20px; justify-content: center; flex-shrink: 0; transition: 0.3s; }
+    .kpi-item { text-align: center; min-width: 200px; }
     .kpi-lbl { font-size: 0.65rem; color: #888; text-transform: uppercase; font-weight: bold; }
     .kpi-val { font-size: 1.2rem; font-weight: 900; color: #fff; margin-top: 0px; }
+    .kpi-border { border-left: 2px solid var(--epi-yellow); }
+
+    /* 🚨 NEW: DYNAMIC KPI VISIBILITY CSS 🚨 */
+    body[data-mode="PERFORMANCE"] .kpi-cons, body[data-mode="PERFORMANCE"] .kpi-cost { display: none !important; }
+    body[data-mode="CONSUMPTION"] .kpi-cost { display: none !important; }
+    body[data-mode="COSTING"] .kpi-cons { display: none !important; }
 
     main { padding: 10px 20px; flex-grow: 1; display: grid; gap: 12px; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); min-height: 0; }
     
@@ -105,7 +109,6 @@
 
     #loader { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10001; color: var(--epi-yellow); font-weight: bold; display: none; }
 
-    /* Custom Labels for Export Modal */
     .exp-label { font-size: 0.7rem; color: var(--epi-yellow); text-transform: uppercase; font-weight: bold; margin-bottom: 3px; display: block; }
     .chk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #111; padding: 10px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 15px; overflow-y: auto; }
     .chk-item { font-size: 0.75rem; color: #ccc; display: flex; align-items: center; gap: 6px; cursor: pointer; }
@@ -198,7 +201,7 @@
     </div>
     <div class="header-right">
         <div class="epi-logo-text">Epiroc</div>
-        <div class="login-info">VERSION 3.0 | LOGGED IN: <span id="active-user-display">---</span></div>
+        <div class="login-info">V 3.0 | <span id="active-user-display">---</span> (<span id="active-role-display">---</span>)</div>
         <button class="btn-logout" onclick="location.reload()">LOG OUT</button>
     </div>
 </header>
@@ -210,7 +213,7 @@
     <div class="divider"></div>
     <div class="filter-group"><label>FLEET</label><select id="flt-fleet" onchange="processData()"><option value="ALL">All</option></select></div>
     <div class="divider"></div>
-    <div class="mode-selector">
+    <div class="mode-selector" id="mode-selector-wrapper">
         <label>MODE</label>
         <select id="flt-mode" onchange="switchMode()">
             <option value="PERFORMANCE">PERFORMANCE</option>
@@ -230,9 +233,9 @@
 
 <div class="summary-panel">
     <div class="kpi-item"><div class="kpi-lbl">Total Metres Drilled</div><div class="kpi-val" id="kpi-metres">0 M</div></div>
-    <div class="kpi-item"><div class="kpi-lbl">Total Rocktools Consumed</div><div class="kpi-val" id="kpi-parts">0 Qty</div></div>
-    <div class="kpi-item"><div class="kpi-lbl">Total Consumable Cost</div><div class="kpi-val" id="kpi-cost">₹ 0</div></div>
-    <div class="kpi-item" style="border-left: 2px solid var(--epi-yellow); padding-left: 20px;"><div class="kpi-lbl" style="color: var(--epi-yellow);">Cost Per Metre (CPM)</div><div class="kpi-val" id="kpi-cpm" style="color: var(--epi-yellow);">₹ 0.00</div></div>
+    <div class="kpi-item kpi-cons kpi-border"><div class="kpi-lbl">Total Rocktools Consumed</div><div class="kpi-val" id="kpi-parts">0 Qty</div></div>
+    <div class="kpi-item kpi-cost kpi-border"><div class="kpi-lbl">Total Consumable Cost</div><div class="kpi-val" id="kpi-cost">₹ 0</div></div>
+    <div class="kpi-item kpi-cost kpi-border"><div class="kpi-lbl" style="color: var(--epi-yellow);">Cost Per Metre (CPM)</div><div class="kpi-val" id="kpi-cpm" style="color: var(--epi-yellow);">₹ 0.00</div></div>
 </div>
 
 <main id="dashboard-grid">
@@ -293,6 +296,10 @@ let filterHierarchy = {};
 let chartTypeState = {}; 
 let currentChartData = {}; 
 
+// 🚨 NEW: Global Security Variables
+let currentUserRole = "Operator";
+let currentUserSite = "ALL";
+
 async function attemptLogin() {
     const u = document.getElementById('log-user').value;
     const p = document.getElementById('log-pass').value;
@@ -308,8 +315,24 @@ async function attemptLogin() {
         const res = await fetch(PERF_APP_URL, { method: "POST", body: payload }).then(r => r.json());
         
         if (res.status === "SUCCESS") {
+            // Store permissions
+            currentUserRole = res.role || "Operator";
+            currentUserSite = res.site || "ALL";
+
             document.getElementById('login-overlay').style.display = 'none';
             document.getElementById('active-user-display').innerText = res.user;
+            document.getElementById('active-role-display').innerText = currentUserRole;
+
+            // 🚨 SECURITY: If not Admin, remove Costing & Consumption tabs permanently
+            if (currentUserRole.toLowerCase() !== "admin") {
+                const modeSel = document.getElementById('flt-mode');
+                for (let i = modeSel.options.length - 1; i >= 0; i--) {
+                    if (modeSel.options[i].value !== "PERFORMANCE") {
+                        modeSel.remove(i);
+                    }
+                }
+            }
+
             fetchData(); 
         } else {
             errBox.style.display = 'block';
@@ -356,8 +379,16 @@ async function fetchData() {
             fetch(PERF_APP_URL, { method: "POST", body: payload }).then(r => r.json()),
             fetch(CONS_APP_URL, { method: "POST", body: payload }).then(r => r.json())
         ]);
+        
         if (perfRes.status === "SUCCESS") dbPerf = perfRes.performance.data || [];
         if (consRes.status === "SUCCESS") dbCons = consRes.consumption.data || [];
+
+        // 🚨 DATA LOCKDOWN: Filter arrays immediately based on User's Site
+        if (currentUserRole.toLowerCase() !== "admin" && currentUserSite !== "ALL" && currentUserSite !== "") {
+            dbPerf = dbPerf.filter(r => String(r[3]).trim().toLowerCase() === currentUserSite.toLowerCase());
+            dbCons = dbCons.filter(r => String(r[2]).trim().toLowerCase() === currentUserSite.toLowerCase());
+        }
+
         buildFilterHierarchy();
         processData(); 
     } catch (err) { alert("Network Error: " + err); }
@@ -413,22 +444,15 @@ function updateFleetDropdown() {
     processData();
 }
 
-// ------------------------------------------------------------------
-// 🚨 EXPORT MODAL LOGIC 🚨
-// ------------------------------------------------------------------
 function openExportMenu() {
-    // Sync dropdown options from main dashboard
     document.getElementById('exp-cust').innerHTML = document.getElementById('flt-cust').innerHTML;
     document.getElementById('exp-site').innerHTML = document.getElementById('flt-site').innerHTML;
     document.getElementById('exp-fleet').innerHTML = document.getElementById('flt-fleet').innerHTML;
-    
-    // Set selected values to match dashboard
     document.getElementById('exp-cust').value = document.getElementById('flt-cust').value;
     document.getElementById('exp-site').value = document.getElementById('flt-site').value;
     document.getElementById('exp-fleet').value = document.getElementById('flt-fleet').value;
     document.getElementById('exp-date-from').value = document.getElementById('flt-date-from').value;
     document.getElementById('exp-date-to').value = document.getElementById('flt-date-to').value;
-    
     document.getElementById('export-overlay').style.display = 'flex';
 }
 
@@ -715,9 +739,6 @@ function drawChart(canvasId, dataObj, totalId, colorCode) {
     });
 }
 
-// ==========================================
-// 🚨 DYNAMIC EXCEL EXPORT ENGINE 🚨
-// ==========================================
 async function exportExcel() {
     const data = getExportData(); 
     const selectedHoles = getSelectedHoles();
@@ -737,7 +758,6 @@ async function exportExcel() {
     ws.addRow(["Month", dateRange]);
     ws.addRow([]);
     
-    // Build Dynamic Headers
     let header1 = ["Date", "Shift", "Location / Loc", "Machine Status", "Total Metres", "Total Holes"];
     let header2 = ["", "", "", "", "", ""];
 
@@ -749,7 +769,6 @@ async function exportExcel() {
     ws.addRow(header1);
     ws.addRow(header2);
 
-    // Apply Dynamic Merges
     let colStart = 7;
     selectedHoles.forEach(h => {
         ws.mergeCells(6, colStart, 6, colStart + 2);
@@ -758,7 +777,6 @@ async function exportExcel() {
 
     for(let i=1; i<=7; i++) ws.getRow(i).font = { bold: true };
 
-    // Inject Dynamic Data Rows
     data.forEach(r => {
         let row = [
             parseRowDate(r[1]).toLocaleDateString('en-GB'), r[5] || "", r[7] || "", r[8] || "", r[9] || 0, r[10] || 0
@@ -769,7 +787,6 @@ async function exportExcel() {
         ws.addRow(row);
     });
 
-    // Apply Conditional Formatting
     ws.eachRow((row, rowNumber) => {
         if (rowNumber > 7) { 
             let statusStr = String(row.getCell(4).value || "").toLowerCase();
@@ -796,9 +813,6 @@ async function exportExcel() {
     document.getElementById('export-overlay').style.display = 'none'; 
 }
 
-// ==========================================
-// 🚨 DYNAMIC PDF EXPORT ENGINE 🚨
-// ==========================================
 function exportPDF() {
     const { jsPDF } = window.jspdf;
     const data = getExportData(); 
@@ -807,7 +821,6 @@ function exportPDF() {
     if (data.length === 0) return alert("No data available to export based on selected criteria.");
     if (selectedHoles.length === 0) return alert("Please select at least one hole type to export.");
 
-    // Dynamically adjust page orientation based on how many columns are selected
     const orientation = selectedHoles.length > 5 ? 'landscape' : 'portrait';
     const doc = new jsPDF(orientation, 'pt', 'a2');
 
@@ -820,7 +833,6 @@ function exportPDF() {
     doc.text(`Machine Sl.No: ${selFleet === "ALL" ? "All Fleets" : selFleet}`, 40, 65);
     doc.text(`Date Range: ${dateRange}`, 40, 85);
 
-    // Build Dynamic Headers
     let head1 = [
         { content: 'Date', rowSpan: 2 }, { content: 'Shift', rowSpan: 2 }, { content: 'Location', rowSpan: 2 }, 
         { content: 'Status', rowSpan: 2 }, { content: 'Tot Metres', rowSpan: 2 }, { content: 'Tot Holes', rowSpan: 2 }
@@ -834,7 +846,6 @@ function exportPDF() {
 
     const headers = [head1, head2];
 
-    // Build Dynamic Rows
     const rows = data.map(r => {
         let row = [
             parseRowDate(r[1]).toLocaleDateString('en-GB'), r[5] || "", r[7] || "", r[8] || "", r[9] || 0, r[10] || 0
