@@ -550,18 +550,15 @@ function processData() {
     const selSite = document.getElementById('flt-site').value;
     const selFleet = document.getElementById('flt-fleet').value;
     
-    // 1. Force Midnight for filter range
+    // 1. Force boundaries for filter range
     let fromDate = new Date(document.getElementById('flt-date-from').value);
     fromDate.setHours(0, 0, 0, 0); 
     
     let toDate = new Date(document.getElementById('flt-date-to').value);
-    toDate.setHours(23, 59, 59, 999); // Set to end of the day
+    toDate.setHours(23, 59, 59, 999); 
 
     let pData = dbPerf.filter(row => {
-        // 🚨 CRITICAL: Ensure row[1] is the correct column index for your date!
         let rDate = parseRowDate(row[1]); 
-        
-        // 2. Force Midnight for the row date so time-of-day doesn't matter
         rDate.setHours(0, 0, 0, 0);
         
         if (isNaN(rDate.getTime())) return false;
@@ -572,16 +569,28 @@ function processData() {
         
         return rDate >= fromDate && rDate <= toDate && cMatch && sMatch && fMatch;
     });
+
+    // 🚨 MOVED: Just declare the set here. Do not populate it yet!
     let activeMachines = new Set();
-    pData.forEach(r => activeMachines.add(String(r[4]).trim()));
 
     let cData = dbCons.filter(row => {
         let rDate = parseRowDate(row[4]); 
+        
+        // 🚨 FIX 1: Added Midnight reset for consumption data too!
+        rDate.setHours(0, 0, 0, 0); 
+        
         if (isNaN(rDate.getTime())) return false;
         let cMatch = selCust === "ALL" || String(row[1]).trim() === selCust;
         let sMatch = selSite === "ALL" || String(row[2]).trim() === selSite;
         let fMatch = selFleet === "ALL" || String(row[3]).trim() === selFleet;
-        if (rDate >= fromDate && rDate <= toDate && cMatch && sMatch && fMatch) { activeMachines.add(String(row[3]).trim()); return true; } return false;
+        
+        if (rDate >= fromDate && rDate <= toDate && cMatch && sMatch && fMatch) { 
+            // Optional: If you want machines that consumed parts to count as "Active" even if 0 meters, keep this.
+            // If you ONLY want drilling machines to be active, remove this activeMachines.add line.
+            activeMachines.add(String(row[3]).trim()); 
+            return true; 
+        } 
+        return false;
     });
 
     let tMetres = 0, tParts = 0, tCost = 0;
@@ -597,13 +606,17 @@ function processData() {
         const m = parseFloat(r[9]) || 0; 
         const dateKey = parseRowDate(r[1]).toLocaleDateString('en-GB'); 
 
+        // 🚨 FIX 2: Only add to Active Population if it actually drilled meters!
+        if (m > 0) {
+            activeMachines.add(fleet);
+        }
+
         tMetres += m;
         addVal(fleetMetres, fleet, m);
         addVal(dailyTrend, dateKey, m);
 
         if(!perfTableMap[fleet]) perfTableMap[fleet] = { types: {}, rdt: 0 };
         function mapDrill(typeStr, colIdx) { let v = parseFloat(r[colIdx])||0; if(v>0) addVal(perfTableMap[fleet].types, typeStr, v); return v; }
-
         addVal(faceData, "Face Drilling - 4.3/45mm", mapDrill("Face 4.3", 14));
         addVal(faceData, "Face Drilling - 4.9/45mm", mapDrill("Face 4.9", 18));
         addVal(faceData, "Face Drilling - 5.5/48mm", mapDrill("Face 5.5", 22));
