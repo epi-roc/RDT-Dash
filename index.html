@@ -1316,12 +1316,22 @@ async function buildFdmExcelFile(res, params) {
 }
 
 const drillDefs = [
-    { key: 'face', title: 'Face Drilling (4.3/45mm, 4.9/45mm, 5.5/48mm)', M: [14, 18, 22] },
-    { key: 'prod', title: 'Production Drilling', M: [34] },
-    { key: 'ream', title: '102 mm Reaming (4.3/102mm, 4.9/102mm, 5.5/102mm)', M: [38, 42, 46] },
-    { key: 'bolt', title: '33mm Rock Bolting (2.8/33mm, 2.1/33mm)', M: [26, 30] },
-    { key: 'split', title: 'Split Set Drilling (2.8/33mm, 2.1/33mm)', M: [50, 54] },
-    { key: 'scale', title: 'Scaling (10/64)', M: [58] }
+    { title: "Face Drilling - 4.3/45mm", key: "face_43", M: [14] },
+    { title: "Face Drilling - 4.9/45mm", key: "face_49", M: [18] },
+    { title: "Face Drilling - 5.5/48mm", key: "face_55", M: [22] },
+    
+    { title: "Reaming - 4.3/102mm", key: "reaming_43", M: [38] },
+    { title: "Reaming - 4.9/102mm", key: "reaming_49", M: [42] },
+    { title: "Reaming - 5.5/102mm", key: "reaming_55", M: [46] },
+    
+    // Combining Col L (11) and Col N (13)
+    { title: "Rock bolt Drilling - 2.8/ 33mm +\nSplit Set Drilling - 2.8/ 33", key: "bolt_split_28", M: [26, 50] },
+    
+    // Combining Col M (12) and Col O (14)
+    { title: "Rock bolt Drilling - 2.1/ 33mm +\nSplit Set Drilling - 2.1/ 33", key: "bolt_split_21", M: [30, 54] },
+    
+    { title: "Scaling", key: "scaling", M: [58] },
+    { title: "Production", key: "production", M: [34] }
 ];
 
 function openIsolatedFdmModal() {
