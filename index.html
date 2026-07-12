@@ -296,7 +296,7 @@
 <script>
 Chart.register(ChartDataLabels);
 
-const PERF_APP_URL = "https://script.google.com/macros/s/AKfycbx1VNMiQIyetWBhDoO62xH1muqk7xxN53A64CcZ4BjSCLC7wS6CJOZtsKzICoQJA5oSzw/exec"; 
+const PERF_APP_URL = "https://script.google.com/macros/s/AKfycbwh9z8EYgkQ-6LzfXJN6BC5VdmaD98KUmnzy9P8tppFbCjzObZ5E8vdhKpmw4VfVhwz/exec"; 
 const CONS_APP_URL = "https://script.google.com/macros/s/AKfycbwnhqpKWtP7AdhT0NGIGwNIBWv3yTUU3jtXeD6QF-phPxe5ZKaGyw2RY5WBzezfefEp/exec";
 
 let dbPerf = [];
@@ -573,13 +573,10 @@ function processData() {
         return rDate >= fromDate && rDate <= toDate && cMatch && sMatch && fMatch;
     });
 
-    // 🚨 MOVED: Just declare the set here. Do not populate it yet!
     let activeMachines = new Set();
 
     let cData = dbCons.filter(row => {
         let rDate = parseRowDate(row[4]); 
-        
-        // 🚨 FIX 1: Added Midnight reset for consumption data too!
         rDate.setHours(0, 0, 0, 0); 
         
         if (isNaN(rDate.getTime())) return false;
@@ -588,8 +585,6 @@ function processData() {
         let fMatch = selFleet === "ALL" || String(row[3]).trim() === selFleet;
         
         if (rDate >= fromDate && rDate <= toDate && cMatch && sMatch && fMatch) { 
-            // Optional: If you want machines that consumed parts to count as "Active" even if 0 meters, keep this.
-            // If you ONLY want drilling machines to be active, remove this activeMachines.add line.
             activeMachines.add(String(row[3]).trim()); 
             return true; 
         } 
@@ -604,34 +599,48 @@ function processData() {
 
     function addVal(obj, key, val) { if (key && !isNaN(val)) obj[key] = (obj[key] || 0) + parseFloat(val); }
 
+    // ==========================================
+    // 🚨 REWRITTEN: TALL FORMAT DATA PROCESSING
+    // ==========================================
     pData.forEach(r => {
         const fleet = String(r[4]).trim();
-        const m = parseFloat(r[9]) || 0; 
         const dateKey = parseRowDate(r[1]).toLocaleDateString('en-GB'); 
+        
+        // Grab the Hole Type (Index 8) and Total Meters (Index 11)
+        const holeType = String(r[8] || "").trim();
+        const m = parseFloat(r[11]) || 0; 
 
-        // 🚨 FIX 2: Only add to Active Population if it actually drilled meters!
         if (m > 0) {
             activeMachines.add(fleet);
+            tMetres += m;
+            
+            addVal(fleetMetres, fleet, m);
+            addVal(dailyTrend, dateKey, m);
+
+            if(!perfTableMap[fleet]) perfTableMap[fleet] = { types: {}, rdt: 0 };
+            
+            // Log this specific meter count under its specific hole type string
+            addVal(perfTableMap[fleet].types, holeType, m);
+
+            // Route the meters to the correct dashboard chart based on the hole type name
+            let typeLower = holeType.toLowerCase();
+            if (typeLower.includes("face")) {
+                addVal(faceData, holeType, m);
+            } else if (typeLower.includes("rock bolt") || typeLower.includes("rockbolt")) {
+                addVal(rbData, holeType, m);
+            } else if (typeLower.includes("production")) {
+                addVal(prodData, holeType, m);
+            } else if (typeLower.includes("reaming")) {
+                addVal(reamData, holeType, m);
+            } else if (typeLower.includes("split set")) {
+                addVal(splitData, holeType, m);
+            }
         }
-
-        tMetres += m;
-        addVal(fleetMetres, fleet, m);
-        addVal(dailyTrend, dateKey, m);
-
-        if(!perfTableMap[fleet]) perfTableMap[fleet] = { types: {}, rdt: 0 };
-        function mapDrill(typeStr, colIdx) { let v = parseFloat(r[colIdx])||0; if(v>0) addVal(perfTableMap[fleet].types, typeStr, v); return v; }
-        addVal(faceData, "Face Drilling - 4.3/45mm", mapDrill("Face 4.3", 14));
-        addVal(faceData, "Face Drilling - 4.9/45mm", mapDrill("Face 4.9", 18));
-        addVal(faceData, "Face Drilling - 5.5/48mm", mapDrill("Face 5.5", 22));
-        addVal(rbData, "Rock bolt Drilling - 2.8/33mm", mapDrill("Rockbolt 2.8", 26));
-        addVal(rbData, "Rock bolt Drilling - 2.1/33mm", mapDrill("Rockbolt 2.1", 30));
-        addVal(prodData, "Production Drilling", mapDrill("Production", 34));
-        addVal(reamData, "Reaming - 4.3/102mm", mapDrill("Reaming 4.3", 38));
-        addVal(reamData, "Reaming - 4.9/102mm", mapDrill("Reaming 4.9", 42));
-        addVal(reamData, "Reaming - 5.5/102mm", mapDrill("Reaming 5.5", 46));
-        addVal(splitData, "Split Set Drilling", mapDrill("Split Set", 50));
     });
 
+    // ==========================================
+    // CONSUMPTION DATA (Remains Unchanged)
+    // ==========================================
     cData.forEach(r => {
         const fleet = String(r[3]).trim(); 
         const type = String(r[7] || "Other").trim();  
@@ -786,9 +795,123 @@ function drawChart(canvasId, dataObj, totalId, colorCode) {
     });
 }
 
+// ==========================================
+// 1. THE DATA PIVOTER (Converts Tall to Wide, Sorted & Cleaned)
+// ==========================================
+function getPivotedExportData(rawData, selectedHoles) {
+    let pivoted = {};
+
+    rawData.forEach((r, index) => {
+        // 1. Skip the Header Row to prevent "Invalid Date" errors
+        if (index === 0 && String(r[1]).toLowerCase().includes("date")) return;
+        if (!r[1]) return; 
+
+        // 2. Sanitize the Date to strict midnight so timestamps don't cause duplicate rows
+        let parsedDate = parseRowDate(r[1]);
+        if (isNaN(parsedDate.getTime())) return;
+        
+        parsedDate.setHours(0, 0, 0, 0); 
+        let timeVal = parsedDate.getTime();
+        let dateFormatted = parsedDate.toLocaleDateString('en-GB');
+
+        let fleet = String(r[4] || "").trim();
+        let shift = String(r[5] || "").trim().toUpperCase();
+        
+        // Group by Fleet + Exact Midnight Date + Shift
+        // Note: If you want to merge all shifts into one single daily row, 
+        // change this to: let key = `${fleet}_${timeVal}`;
+        let key = `${fleet}_${timeVal}_${shift}`;
+        
+        if (!pivoted[key]) {
+            pivoted[key] = {
+                timeVal: timeVal, // Saved for chronological sorting
+                dateStr: dateFormatted,
+                shift: shift,
+                location: r[6] || "", 
+                status: r[7] || "",   
+                totMeters: 0,
+                totHoles: 0
+            };
+        }
+        
+        // Accumulate grand totals
+        pivoted[key].totMeters += parseFloat(r[11]) || 0;
+        pivoted[key].totHoles += parseFloat(r[9]) || 0;
+        
+        // Map specific hole types
+        let typeStr = String(r[8]).toLowerCase();
+        let match = selectedHoles.find(h => typeStr.includes(h.label.toLowerCase()) || (h.short && typeStr.includes(h.short.toLowerCase())));
+        
+        if (match) {
+            let idx = match.dataIndex;
+            pivoted[key][idx] = (pivoted[key][idx] || 0) + (parseFloat(r[9]) || 0);     
+            pivoted[key][idx + 1] = (pivoted[key][idx + 1] || 0) + (parseFloat(r[10]) || 0); 
+            pivoted[key][idx + 2] = (pivoted[key][idx + 2] || 0) + (parseFloat(r[11]) || 0); 
+        }
+    });
+
+    // 3. Sort chronologically by Date, then alphabetically by Shift (A, B, C)
+    return Object.values(pivoted)
+        .sort((a, b) => {
+            if (a.timeVal !== b.timeVal) return a.timeVal - b.timeVal;
+            return a.shift.localeCompare(b.shift);
+        })
+        .map(p => {
+            let fakeRow = [];
+            fakeRow[1] = p.dateStr;
+            fakeRow[5] = p.shift;
+            fakeRow[7] = p.location; 
+            fakeRow[8] = p.status;   
+            fakeRow[9] = p.totMeters;
+            fakeRow[10] = p.totHoles;
+            
+            selectedHoles.forEach(h => {
+                fakeRow[h.dataIndex] = p[h.dataIndex] || "";
+                fakeRow[h.dataIndex + 1] = p[h.dataIndex + 1] || "";
+                fakeRow[h.dataIndex + 2] = p[h.dataIndex + 2] || "";
+            });
+            
+            return fakeRow;
+        });
+}
+// ==========================================
+// 1. STRICT FILTER (Replaces your old getExportData)
+// ==========================================
+function getStrictExportData() {
+    const selFleet = document.getElementById('exp-fleet').value;
+    const fromInput = document.getElementById('exp-date-from').value;
+    const toInput = document.getElementById('exp-date-to').value;
+
+    let fromDate = new Date(fromInput);
+    fromDate.setHours(0, 0, 0, 0);
+    let toDate = new Date(toInput);
+    toDate.setHours(23, 59, 59, 999);
+
+    return dbPerf.filter((r, index) => {
+        // Skip headers and empty rows
+        if (index === 0 && String(r[1]).toLowerCase().includes("date")) return false;
+        if (!r[1]) return false;
+        
+        let rDate = parseRowDate(r[1]);
+        if (isNaN(rDate.getTime())) return false;
+        rDate.setHours(0, 0, 0, 0); // Force to strict midnight
+
+        // STRICT GATEKEEPERS
+        let isDateMatch = rDate.getTime() >= fromDate.getTime() && rDate.getTime() <= toDate.getTime();
+        let isFleetMatch = (selFleet === "ALL") || (String(r[4]).trim() === selFleet);
+
+        return isDateMatch && isFleetMatch;
+    });
+}
+
+
+// ==========================================
+// 2. EXCEL EXPORT (Now with Strict Filtering)
+// ==========================================
 async function exportExcel() {
-    const data = getExportData(); 
     const selectedHoles = getSelectedHoles();
+    const strictData = getStrictExportData();
+    const data = getPivotedExportData(strictData, selectedHoles); 
     
     if (data.length === 0) return alert("No data available to export based on selected criteria.");
     if (selectedHoles.length === 0) return alert("Please select at least one hole type to export.");
@@ -796,14 +919,27 @@ async function exportExcel() {
     const selFleet = document.getElementById('exp-fleet').value;
     const dateRange = document.getElementById('exp-date-from').value + " TO " + document.getElementById('exp-date-to').value;
 
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('DPR_Report');
+    // 🚨 EXTRACT SITE NAME FOR HEADER AND TAB
+    let siteName = "All Sites";
+    if (strictData.length > 0) {
+        // Find the first valid row and grab Col D (Index 3) for the Site Name
+        let firstValid = strictData.find(r => r[3]);
+        if (firstValid) siteName = String(firstValid[3]).trim();
+    }
 
+    const wb = new ExcelJS.Workbook();
+    
+    // 🚨 NAME THE TAB (Excel limits tab names to 31 characters, so we truncate if necessary)
+    const safeTabName = (`${siteName} DPR`).substring(0, 31).replace(/[\*\?\/\\\[\]]/g, '');
+    const ws = wb.addWorksheet(safeTabName);
+
+    // 🚨 UPDATED HEADER BLOCK (Shifted down to accommodate Site)
     ws.addRow(["Daily Progress Report"]);
     ws.addRow(["Machine Sl.No", selFleet === "ALL" ? "All Fleets" : selFleet]);
-    ws.addRow(["Machine Model", ""]);
+    ws.addRow(["Machine Model", ""]); // Left blank for manual entry if needed
+    ws.addRow(["Site", siteName]);    // <-- NEW SITE ROW
     ws.addRow(["Month", dateRange]);
-    ws.addRow([]);
+    ws.addRow([]); // Blank row spacer
     
     let header1 = ["Date", "Shift", "Location / Loc", "Machine Status", "Total Metres", "Total Holes"];
     let header2 = ["", "", "", "", "", ""];
@@ -813,29 +949,65 @@ async function exportExcel() {
         header2.push("No of Holes", "Length of Holes", "Total Drilling");
     });
 
+    // These are now Rows 7 and 8
     ws.addRow(header1);
     ws.addRow(header2);
 
     let colStart = 7;
     selectedHoles.forEach(h => {
-        ws.mergeCells(6, colStart, 6, colStart + 2);
+        ws.mergeCells(7, colStart, 7, colStart + 2); // Shifted to Row 7
         colStart += 3;
     });
 
-    for(let i=1; i<=7; i++) ws.getRow(i).font = { bold: true };
+    // Bold the first 8 rows
+    for(let i=1; i<=8; i++) ws.getRow(i).font = { bold: true };
+
+    let grandTotMeters = 0, grandTotHoles = 0;
+    let dynamicTotals = {};
+    selectedHoles.forEach(h => {
+        dynamicTotals[h.dataIndex] = 0;
+        dynamicTotals[h.dataIndex + 1] = 0;
+        dynamicTotals[h.dataIndex + 2] = 0;
+    });
 
     data.forEach(r => {
-        let row = [
-            parseRowDate(r[1]).toLocaleDateString('en-GB'), r[5] || "", r[7] || "", r[8] || "", r[9] || 0, r[10] || 0
-        ];
+        let row = [ r[1], r[5] || "", r[7] || "", r[8] || "", r[9] || 0, r[10] || 0 ];
+        
+        grandTotMeters += parseFloat(r[9]) || 0;
+        grandTotHoles += parseFloat(r[10]) || 0;
+
         selectedHoles.forEach(h => {
-            row.push(r[h.dataIndex] || "", r[h.dataIndex + 1] || "", r[h.dataIndex + 2] || "");
+            let hVal = r[h.dataIndex] || "";
+            let dVal = r[h.dataIndex + 1] || "";
+            let mVal = r[h.dataIndex + 2] || "";
+            
+            row.push(hVal, dVal, mVal);
+            
+            dynamicTotals[h.dataIndex] += parseFloat(hVal) || 0;
+            dynamicTotals[h.dataIndex + 1] += parseFloat(dVal) || 0;
+            dynamicTotals[h.dataIndex + 2] += parseFloat(mVal) || 0;
         });
         ws.addRow(row);
     });
 
+    let totalRowData = ["GRAND TOTAL", "", "", "", grandTotMeters, grandTotHoles];
+    selectedHoles.forEach(h => {
+        totalRowData.push(
+            dynamicTotals[h.dataIndex] || 0,
+            dynamicTotals[h.dataIndex + 1] || 0,
+            dynamicTotals[h.dataIndex + 2] || 0
+        );
+    });
+    
+    let finalRow = ws.addRow(totalRowData);
+    finalRow.font = { bold: true };
+    finalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFCC' } }; 
+
     ws.eachRow((row, rowNumber) => {
-        if (rowNumber > 7) { 
+        // 🚨 SHIFTED TO 8: Only apply formatting to data rows (Row 9 and below)
+        if (rowNumber > 8) { 
+            if (row.getCell(1).value === "GRAND TOTAL") return;
+
             let statusStr = String(row.getCell(4).value || "").toLowerCase();
             let isNoDrilling = statusStr.includes('no') || statusStr.includes('idle') || statusStr.includes('bd') || statusStr.includes('break') || statusStr.includes('service');
 
@@ -856,14 +1028,18 @@ async function exportExcel() {
     });
 
     const buffer = await wb.xlsx.writeBuffer();
-    saveAs(new Blob([buffer], { type: "application/octet-stream" }), "Epiroc_DPR_Report.xlsx");
+    // Use the site name for the downloaded file name too!
+    saveAs(new Blob([buffer], { type: "application/octet-stream" }), `${siteName}_DPR_Report.xlsx`);
     document.getElementById('export-overlay').style.display = 'none'; 
 }
-
+// ==========================================
+// 3. PDF EXPORT (Now with Strict Filtering)
+// ==========================================
 function exportPDF() {
     const { jsPDF } = window.jspdf;
-    const data = getExportData(); 
     const selectedHoles = getSelectedHoles();
+    const strictData = getStrictExportData();
+    const data = getPivotedExportData(strictData, selectedHoles); 
     
     if (data.length === 0) return alert("No data available to export based on selected criteria.");
     if (selectedHoles.length === 0) return alert("Please select at least one hole type to export.");
@@ -874,11 +1050,20 @@ function exportPDF() {
     const selFleet = document.getElementById('exp-fleet').value;
     const dateRange = document.getElementById('exp-date-from').value + " TO " + document.getElementById('exp-date-to').value;
 
+    let siteName = "All Sites";
+    if (strictData.length > 0) {
+        let firstValid = strictData.find(r => r[3]);
+        if (firstValid) siteName = String(firstValid[3]).trim();
+    }
+
     doc.setFontSize(20);
     doc.text("Epiroc Daily Progress Report", 40, 40);
     doc.setFontSize(12);
     doc.text(`Machine Sl.No: ${selFleet === "ALL" ? "All Fleets" : selFleet}`, 40, 65);
-    doc.text(`Date Range: ${dateRange}`, 40, 85);
+    doc.text(`Machine Model: `, 40, 80);
+    // 🚨 ADDED SITE TO PDF
+    doc.text(`Site: ${siteName}`, 40, 95); 
+    doc.text(`Date Range: ${dateRange}`, 40, 110); 
 
     let head1 = [
         { content: 'Date', rowSpan: 2 }, { content: 'Shift', rowSpan: 2 }, { content: 'Location', rowSpan: 2 }, 
@@ -893,18 +1078,47 @@ function exportPDF() {
 
     const headers = [head1, head2];
 
+    let grandTotMeters = 0, grandTotHoles = 0;
+    let dynamicTotals = {};
+    selectedHoles.forEach(h => {
+        dynamicTotals[h.dataIndex] = 0;
+        dynamicTotals[h.dataIndex + 1] = 0;
+        dynamicTotals[h.dataIndex + 2] = 0;
+    });
+
     const rows = data.map(r => {
-        let row = [
-            parseRowDate(r[1]).toLocaleDateString('en-GB'), r[5] || "", r[7] || "", r[8] || "", r[9] || 0, r[10] || 0
-        ];
+        let row = [ r[1], r[5] || "", r[7] || "", r[8] || "", r[9] || 0, r[10] || 0 ];
+        
+        grandTotMeters += parseFloat(r[9]) || 0;
+        grandTotHoles += parseFloat(r[10]) || 0;
+
         selectedHoles.forEach(h => {
-            row.push(r[h.dataIndex] || "", r[h.dataIndex + 1] || "", r[h.dataIndex + 2] || "");
+            let hVal = r[h.dataIndex] || "";
+            let dVal = r[h.dataIndex + 1] || "";
+            let mVal = r[h.dataIndex + 2] || "";
+            
+            row.push(hVal, dVal, mVal);
+            
+            dynamicTotals[h.dataIndex] += parseFloat(hVal) || 0;
+            dynamicTotals[h.dataIndex + 1] += parseFloat(dVal) || 0;
+            dynamicTotals[h.dataIndex + 2] += parseFloat(mVal) || 0;
         });
         return row;
     });
 
+    let totalRowData = ["GRAND TOTAL", "", "", "", grandTotMeters, grandTotHoles];
+    selectedHoles.forEach(h => {
+        totalRowData.push(
+            dynamicTotals[h.dataIndex] || 0,
+            dynamicTotals[h.dataIndex + 1] || 0,
+            dynamicTotals[h.dataIndex + 2] || 0
+        );
+    });
+    rows.push(totalRowData);
+
     doc.autoTable({
-        startY: 110,
+        // 🚨 SHIFTED TABLE START DOWN TO ACCOMMODATE EXTRA TEXT
+        startY: 130, 
         head: headers,
         body: rows,
         theme: 'grid',
@@ -913,6 +1127,12 @@ function exportPDF() {
         alternateRowStyles: { fillColor: [245, 245, 245] },
         
         didParseCell: function(data) {
+            if (data.section === 'body' && data.row.raw[0] === "GRAND TOTAL") {
+                data.cell.styles.fontStyle = 'bold';
+                data.cell.styles.fillColor = [255, 255, 204]; 
+                return; 
+            }
+
             if (data.section === 'body' && data.column.index >= 6) { 
                 let statusStr = String(data.row.raw[3] || "").toLowerCase();
                 let isNoDrilling = statusStr.includes('no') || statusStr.includes('idle') || statusStr.includes('bd') || statusStr.includes('break') || statusStr.includes('service');
@@ -927,7 +1147,7 @@ function exportPDF() {
         }
     });
 
-    doc.save('Epiroc_DPR_Report.pdf');
+    doc.save(`${siteName}_DPR_Report.pdf`);
     document.getElementById('export-overlay').style.display = 'none'; 
 }
 // --- MODAL CONTROLS ---
@@ -1026,52 +1246,6 @@ function closeDailyModal() {
     if (loader) loader.style.display = 'none'; 
 }
 
-function executeFdmExport() {
-    const btn = document.getElementById('btn-fdm-download');
-    
-    const params = {
-        fromDate: document.getElementById('fdm-from-date').value,
-        toDate: document.getElementById('fdm-to-date').value,
-        customer: document.getElementById('fdm-customer').value,
-        site: document.getElementById('fdm-site').value
-    };
-    
-    if (!params.fromDate || !params.toDate) {
-        alert("Please select both From and To dates.");
-        return;
-    }
-
-    btn.innerText = "Generating...";
-    btn.disabled = true;
-
-    // We use fetch() because the UI lives on GitHub
-    // Ensure PERF_APP_URL is your current Apps Script Web App URL
-    fetch(PERF_APP_URL, {
-        method: 'POST',
-        // We tell doPost to trigger the 'generateFDM' case we just added
-        body: JSON.stringify({
-            action: 'generateFDM',
-            ...params 
-        })
-    })
-    .then(res => res.json())
-    .then(response => {
-        btn.innerText = "Download Excel";
-        btn.disabled = false;
-        
-        if (response.status === "SUCCESS") {
-            buildFdmExcelFile(response, params);
-            document.getElementById('fdm-export-modal').style.display = 'none';
-        } else {
-            alert("Backend Error: " + response.message);
-        }
-    })
-    .catch(error => {
-        btn.innerText = "Download Excel";
-        btn.disabled = false;
-        alert("Network/CORS Error: " + error.message);
-    });
-}
 
 function executeFdmExport() {
     const btn = document.getElementById('btn-fdm-download');
@@ -1117,28 +1291,85 @@ function executeFdmExport() {
         alert("Check Console F12 for detail: " + err.message);
     });
 }
-// --- PASTE IN index.html ---
+// ==========================================
+// 🚨 PERFECTED DRILL DEFS (Smart Keyword Matching)
+// Separates Face & Reaming by size. Combines Rockbolt & Split Set.
+// ==========================================
+const drillDefs = [
+    { title: "Face Drilling - 4.3/45mm", match: (t) => t.includes("face") && t.includes("4.3") },
+    { title: "Face Drilling - 4.9/45mm", match: (t) => t.includes("face") && t.includes("4.9") },
+    { title: "Face Drilling - 5.5/48mm", match: (t) => t.includes("face") && t.includes("5.5") },
+    
+    { title: "Reaming - 4.3/102mm", match: (t) => t.includes("ream") && t.includes("4.3") },
+    { title: "Reaming - 4.9/102mm", match: (t) => t.includes("ream") && t.includes("4.9") },
+    { title: "Reaming - 5.5/102mm", match: (t) => t.includes("ream") && t.includes("5.5") },
+    
+    // Combined Rockbolt & Split Set (Checks for EITHER Bolt OR Split, AND 2.8)
+    { title: "Rock bolt & Split Set - 2.8/33mm", 
+      match: (t) => (t.includes("bolt") && t.includes("2.8")) || (t.includes("split") && t.includes("2.8")) },
+      
+    // Combined Rockbolt & Split Set (Checks for EITHER Bolt OR Split, AND 2.1)
+    { title: "Rock bolt & Split Set - 2.1/33mm", 
+      match: (t) => (t.includes("bolt") && t.includes("2.1")) || (t.includes("split") && t.includes("2.1")) },
+      
+    { title: "Scaling", match: (t) => t.includes("scal") },
+    { title: "Production", match: (t) => t.includes("prod") }
+];
+
 async function buildFdmExcelFile(res, params) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('MONTHLY FDM');
 
     // ==========================================
-    // 1. FILTER DYNAMIC COLUMNS (Omit Empty Drill Types)
+    // 1. DATA PROCESSING (Pivoting Tall Data)
     // ==========================================
     const typeGrandTotals = new Array(drillDefs.length).fill(0);
-    
-    // Pre-scan to find which drills were actually used
-    res.rows.forEach(r => {
+    const dailyTotals = {}; 
+    const activeFleetsPerType = new Array(drillDefs.length).fill(null).map(() => new Set());
+
+    res.rows.forEach((r, index) => {
+        if (index === 0 && String(r[1]).toLowerCase().includes("date")) return;
+        
+        let dateObj = parseRowDate(r[1]); 
+        if (isNaN(dateObj.getTime())) return;
+        dateObj.setHours(0, 0, 0, 0);
+
+        const dateStr = dateObj.toLocaleDateString('en-GB'); 
+        const fleet = String(r[4] || "").trim(); 
+        const typeStr = String(r[8] || "").toLowerCase(); 
+        const meters = parseFloat(r[11]) || 0;            
+        
+        if (meters <= 0) return; 
+
+        if (!dailyTotals[dateStr]) {
+            dailyTotals[dateStr] = {
+                dateObj: dateObj,
+                dateStr: dateStr,
+                totals: new Array(drillDefs.length).fill(0)
+            };
+        }
+        
+        // 🚨 MAGIC FUNCTION MATCHER: Safely finds the keywords no matter how they are formatted
         drillDefs.forEach((def, i) => {
-            def.M.forEach(colIndex => {
-                typeGrandTotals[i] += (parseFloat(r[colIndex]) || 0);
-            });
+            if (def.match(typeStr)) {
+                dailyTotals[dateStr].totals[i] += meters;
+                typeGrandTotals[i] += meters;
+                if (fleet) activeFleetsPerType[i].add(fleet);
+            }
         });
     });
 
-    // Create a new array of ONLY the drill types that have > 0 meters
-    const activeDefs = drillDefs.filter((_, i) => typeGrandTotals[i] > 0);
-    const totalCols = activeDefs.length + 1; // Date (Col A) + Active Drill Types (Col B+)
+    const activeDefs = [];
+    const activeFleets = [];
+    drillDefs.forEach((def, i) => {
+        if (typeGrandTotals[i] > 0) {
+            activeDefs.push(def);
+            activeFleets.push(activeFleetsPerType[i]);
+        }
+    });
+    
+    // Ensures at least 2 columns exist so Excel headers don't glitch
+    const totalCols = Math.max(2, activeDefs.length + 1);
 
     // ==========================================
     // 2. LOGO AND TOP HEADERS
@@ -1162,61 +1393,28 @@ async function buildFdmExcelFile(res, params) {
         });
     }
 
-    // Headers shifted down to Row 4
-    ws.mergeCells(4, 1, 4, totalCols);
+   ws.mergeCells(4, 1, 4, totalCols);
     ws.getCell(4, 1).value = "MONTHLY DRILLING REPORT";
     ws.getCell(4, 1).font = { bold: true, size: 14 };
     ws.getCell(4, 1).alignment = { horizontal: 'left' };
 
-    ws.addRow(["CPM SERVICE ORDER NO. : " + res.serviceOrder]);
+    ws.addRow(["CPM SERVICE ORDER NO. : " + (res.serviceOrder || "N/A")]);
     ws.addRow(["SITE : " + params.customer + ", " + params.site]);
     
     const todayStr = new Date().toLocaleDateString('en-GB');
     ws.addRow(["MONTH :", `${params.fromDate} to ${params.toDate}`]);
-    ws.getCell(7, totalCols).value = "Date: " + todayStr; // Now on Row 7
+    ws.getCell(7, totalCols).value = "Date: " + todayStr; 
     ws.getCell(7, totalCols).alignment = { horizontal: 'right' };
 
     // ==========================================
-    // 3. DATA PROCESSING: GROUP BY DATE (Using Active Columns)
-    // ==========================================
-    const dailyTotals = {}; 
-    const activeFleetsPerType = new Array(activeDefs.length).fill(null).map(() => new Set());
-
-    res.rows.forEach(r => {
-        const dateObj = new Date(r[1]);
-        const dateStr = dateObj.toLocaleDateString('en-GB'); 
-        const fleet = String(r[4] || "").trim(); 
-        
-        if (!dailyTotals[dateStr]) {
-            dailyTotals[dateStr] = {
-                dateObj: dateObj,
-                dateStr: dateStr,
-                totals: new Array(activeDefs.length).fill(0)
-            };
-        }
-        
-        activeDefs.forEach((def, i) => {
-            let typeSum = 0;
-            def.M.forEach(colIndex => {
-                typeSum += (parseFloat(r[colIndex]) || 0); 
-            });
-            
-            if (typeSum > 0) {
-                dailyTotals[dateStr].totals[i] += typeSum; 
-                if (fleet) activeFleetsPerType[i].add(fleet); 
-            }
-        });
-    });
-
-    // ==========================================
-    // 4. DYNAMIC TABLE HEADERS (Rows 8, 9, 10)
+    // 4. DYNAMIC TABLE HEADERS (Your exact code)
     // ==========================================
     const row8Data = ["FLEET"]; 
     const row9Data = ["DATE"];  
     const row10Data = [""];      
 
     activeDefs.forEach((def, i) => {
-        row8Data.push(Array.from(activeFleetsPerType[i]).join(', '));
+        row8Data.push(Array.from(activeFleets[i]).join(', '));
         row9Data.push(def.title);
         row10Data.push("TOTAL DRILLING METERS");
     });
@@ -1233,7 +1431,6 @@ async function buildFdmExcelFile(res, params) {
     row10.font = { bold: true };
     row10.alignment = { horizontal: 'center', vertical: 'middle' };
 
-    // Apply the HZL Yellow Background to headers
     [row8, row9, row10].forEach(row => {
         row.eachCell({ includeEmpty: false }, cell => {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
@@ -1241,22 +1438,28 @@ async function buildFdmExcelFile(res, params) {
     });
 
     // ==========================================
-    // 5. POPULATE DAILY DATA
+    // 5. POPULATE DAILY DATA (Your exact code)
     // ==========================================
     const groupedRows = Object.values(dailyTotals).sort((a, b) => a.dateObj - b.dateObj);
     const columnTotals = new Array(activeDefs.length).fill(0);
 
     groupedRows.forEach(g => {
         const rowData = [g.dateStr];
-        g.totals.forEach((total, i) => {
-            rowData.push(total > 0 ? total : ""); 
-            columnTotals[i] += total; 
+        
+        let activeIndex = 0;
+        drillDefs.forEach((def, originalIndex) => {
+            if (typeGrandTotals[originalIndex] > 0) {
+                let val = g.totals[originalIndex];
+                rowData.push(val > 0 ? val : ""); 
+                columnTotals[activeIndex] += val; 
+                activeIndex++;
+            }
         });
         ws.addRow(rowData);
     });
 
     // ==========================================
-    // 6. THE TOTAL SUM ROW
+    // 6. THE TOTAL SUM ROW (Your exact code)
     // ==========================================
     const totalRowData = ["TOTAL"];
     columnTotals.forEach(total => totalRowData.push(total));
@@ -1265,7 +1468,7 @@ async function buildFdmExcelFile(res, params) {
     totalRow.getCell(1).alignment = { horizontal: 'right' };
 
     // ==========================================
-    // 7. FORMATTING & BORDERS
+    // 7. FORMATTING & BORDERS (Your exact code)
     // ==========================================
     ws.columns.forEach((column, i) => {
         column.width = i === 0 ? 15 : 28; 
@@ -1278,30 +1481,25 @@ async function buildFdmExcelFile(res, params) {
     }
 
     // ==========================================
-    // 8. 3-COLUMN SIGNATORY BLOCK (Alignment Adjusted)
+    // 8. 3-COLUMN SIGNATORY BLOCK (Your exact code)
     // ==========================================
     ws.addRow([]); ws.addRow([]); ws.addRow([]);
 
-    // Push the middle signature further right to prevent overlapping with the narrow Date column
     let midCol = Math.floor(totalCols / 2) + 1;
-    // Safety check just in case there are very few columns
     if (midCol <= 2 && totalCols >= 4) midCol = 3; 
     if (midCol >= totalCols) midCol = Math.max(2, totalCols - 1);
 
     const sigRow = ws.addRow(["Epiroc Representative"]);
     sigRow.getCell(1).font = { bold: true };
     
-    // Middle Signature (CPM) - Now shifted right
     ws.getCell(sigRow.number, midCol).value = "HZL\n(CPM Contract Manager)";
     ws.getCell(sigRow.number, midCol).font = { bold: true };
     ws.getCell(sigRow.number, midCol).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
-    // Right Signature (Mine Manager)
     ws.getCell(sigRow.number, totalCols).value = "HZL\n(Mine Manager)";
     ws.getCell(sigRow.number, totalCols).font = { bold: true };
     ws.getCell(sigRow.number, totalCols).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
-    // Epiroc Address Block (Column A)
     ws.addRow(["Epiroc Mining India Pvt. Limited"]).getCell(1).font = { bold: true };
     ws.addRow(["Mailing Address :"]).getCell(1).font = { bold: true };
     ws.addRow(["207 - 208, Vinayak Business Centre,"]);
@@ -1309,30 +1507,12 @@ async function buildFdmExcelFile(res, params) {
     ws.addRow(["Rajasthan, India"]);
 
     // ==========================================
-    // 9. SAVE AND DOWNLOAD
+    // 9. SAVE AND DOWNLOAD (Your exact code)
     // ==========================================
     const buffer = await wb.xlsx.writeBuffer();
     saveAs(new Blob([buffer]), `FDM_Report_${params.site}_${params.fromDate}.xlsx`);
 }
 
-const drillDefs = [
-    { title: "Face Drilling - 4.3/45mm", key: "face_43", M: [14] },
-    { title: "Face Drilling - 4.9/45mm", key: "face_49", M: [18] },
-    { title: "Face Drilling - 5.5/48mm", key: "face_55", M: [22] },
-    
-    { title: "Reaming - 4.3/102mm", key: "reaming_43", M: [38] },
-    { title: "Reaming - 4.9/102mm", key: "reaming_49", M: [42] },
-    { title: "Reaming - 5.5/102mm", key: "reaming_55", M: [46] },
-    
-    // Combining Col L (11) and Col N (13)
-    { title: "Rock bolt Drilling - 2.8/ 33mm +\nSplit Set Drilling - 2.8/ 33", key: "bolt_split_28", M: [26, 50] },
-    
-    // Combining Col M (12) and Col O (14)
-    { title: "Rock bolt Drilling - 2.1/ 33mm +\nSplit Set Drilling - 2.1/ 33", key: "bolt_split_21", M: [30, 54] },
-    
-    { title: "Scaling", key: "scaling", M: [58] },
-    { title: "Production", key: "production", M: [34] }
-];
 
 function openIsolatedFdmModal() {
     console.log("Modal Opened! Handshake initiated...");
