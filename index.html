@@ -1293,7 +1293,7 @@ function executeFdmExport() {
 }
 // ==========================================
 // 🚨 PERFECTED DRILL DEFS (Smart Keyword Matching)
-// Separates Face & Reaming by size. Combines Rockbolt & Split Set.
+// Added the missing 3.1/35mm Rockbolt category
 // ==========================================
 const drillDefs = [
     { title: "Face Drilling - 4.3/45mm", match: (t) => t.includes("face") && t.includes("4.3") },
@@ -1304,11 +1304,15 @@ const drillDefs = [
     { title: "Reaming - 4.9/102mm", match: (t) => t.includes("ream") && t.includes("4.9") },
     { title: "Reaming - 5.5/102mm", match: (t) => t.includes("ream") && t.includes("5.5") },
     
-    // Combined Rockbolt & Split Set (Checks for EITHER Bolt OR Split, AND 2.8)
+    // 🚨 NEW: 3.1 / 35mm (Checks for Bolt/Split AND either 3.1 or 35)
+    { title: "Rock bolt & Split Set - 3.1/35mm", 
+      match: (t) => (t.includes("bolt") || t.includes("split")) && (t.includes("3.1") || t.includes("35")) },
+
+    // Combined Rockbolt & Split Set 2.8
     { title: "Rock bolt & Split Set - 2.8/33mm", 
       match: (t) => (t.includes("bolt") && t.includes("2.8")) || (t.includes("split") && t.includes("2.8")) },
       
-    // Combined Rockbolt & Split Set (Checks for EITHER Bolt OR Split, AND 2.1)
+    // Combined Rockbolt & Split Set 2.1
     { title: "Rock bolt & Split Set - 2.1/33mm", 
       match: (t) => (t.includes("bolt") && t.includes("2.1")) || (t.includes("split") && t.includes("2.1")) },
       
