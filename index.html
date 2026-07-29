@@ -1254,7 +1254,7 @@ function executeFdmExport() {
     toDate: document.getElementById('fdm-to-date').value,
     customer: document.getElementById('fdm-customer').value,
     site: document.getElementById('fdm-site').value,
-    user: sessionStorage.getItem("loggedInUser") || "Unknown User" // 🚨 ADD THIS (adjust based on how you store the user)
+    user: activeUsername
 };
 
     
