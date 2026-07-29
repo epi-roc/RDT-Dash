@@ -912,9 +912,22 @@ async function exportExcel() {
     const selectedHoles = getSelectedHoles();
     const strictData = getStrictExportData();
     const data = getPivotedExportData(strictData, selectedHoles); 
+
+    if (data.length === 0) return alert("No data available to export.");
+
+    // 🚨 NEW: Silent ping to log the download
+    let activeUser = document.getElementById('logged-user') ? document.getElementById('logged-user').innerText.trim() : "Unknown User";
+    let siteFilter = document.getElementById('export-site') ? document.getElementById('export-site').value : "ALL"; // Adjust this ID if your dropdown is named differently
     
-    if (data.length === 0) return alert("No data available to export based on selected criteria.");
-    if (selectedHoles.length === 0) return alert("Please select at least one hole type to export.");
+    fetch(PERF_APP_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+            action: 'logDownload',
+            user: activeUser,
+            documentType: 'Monthly DPR - Excel',
+            site: siteFilter
+        })
+    }).catch(e => console.log("Logging ping failed silently", e));
 
     const selFleet = document.getElementById('exp-fleet').value;
     const dateRange = document.getElementById('exp-date-from').value + " TO " + document.getElementById('exp-date-to').value;
@@ -1043,6 +1056,20 @@ function exportPDF() {
     
     if (data.length === 0) return alert("No data available to export based on selected criteria.");
     if (selectedHoles.length === 0) return alert("Please select at least one hole type to export.");
+
+    // 🚨 NEW: Silent ping to log the download
+    let activeUser = document.getElementById('logged-user') ? document.getElementById('logged-user').innerText.trim() : "Unknown User";
+    let siteFilter = document.getElementById('export-site') ? document.getElementById('export-site').value : "ALL"; // Adjust this ID if your dropdown is named differently
+    
+    fetch(PERF_APP_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+            action: 'logDownload',
+            user: activeUser,
+            documentType: 'Monthly DPR - PDF',
+            site: siteFilter
+        })
+    }).catch(e => console.log("Logging ping failed silently", e));
 
     const orientation = selectedHoles.length > 5 ? 'landscape' : 'portrait';
     const doc = new jsPDF(orientation, 'pt', 'a2');
