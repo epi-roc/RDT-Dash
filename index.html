@@ -1249,13 +1249,25 @@ function closeDailyModal() {
 
 function executeFdmExport() {
     const btn = document.getElementById('btn-fdm-download');
+
+    // 🚨 SAFE USERNAME GRABBER
+    // We declare the variable here so it is never "undefined"
+    let activeUsername = "Unknown User"; 
+    
+    // Attempt to read the username from the screen.
+    // NOTE: Change 'logged-user' to the actual ID of the HTML element where you display the user's name!
+    const userDisplayElement = document.getElementById('logged-user'); 
+    if (userDisplayElement) {
+        activeUsername = userDisplayElement.innerText.trim();
+    }
+
     const params = {
-    fromDate: document.getElementById('fdm-from-date').value,
-    toDate: document.getElementById('fdm-to-date').value,
-    customer: document.getElementById('fdm-customer').value,
-    site: document.getElementById('fdm-site').value,
-    user: activeUsername
-};
+        fromDate: document.getElementById('fdm-from-date').value,
+        toDate: document.getElementById('fdm-to-date').value,
+        customer: document.getElementById('fdm-customer').value,
+        site: document.getElementById('fdm-site').value,
+        user: activeUsername  // Now this is safely defined and won't crash!
+    };
 
     
     if (!params.fromDate || !params.toDate) return alert("Select both dates.");
