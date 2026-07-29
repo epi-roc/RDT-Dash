@@ -1250,11 +1250,13 @@ function closeDailyModal() {
 function executeFdmExport() {
     const btn = document.getElementById('btn-fdm-download');
     const params = {
-        fromDate: document.getElementById('fdm-from-date').value,
-        toDate: document.getElementById('fdm-to-date').value,
-        customer: document.getElementById('fdm-customer').value,
-        site: document.getElementById('fdm-site').value
-    };
+    fromDate: document.getElementById('fdm-from-date').value,
+    toDate: document.getElementById('fdm-to-date').value,
+    customer: document.getElementById('fdm-customer').value,
+    site: document.getElementById('fdm-site').value,
+    user: sessionStorage.getItem("loggedInUser") || "Unknown User" // 🚨 ADD THIS (adjust based on how you store the user)
+};
+
     
     if (!params.fromDate || !params.toDate) return alert("Select both dates.");
 
