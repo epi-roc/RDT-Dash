@@ -916,7 +916,7 @@ async function exportExcel() {
     if (data.length === 0) return alert("No data available to export.");
 
     // 🚨 NEW: Silent ping to log the download
-    let activeUser = document.getElementById('logged-user') ? document.getElementById('logged-user').innerText.trim() : "Unknown User";
+    let activeUser = document.getElementById('active-user-display') ? document.getElementById('active-user-display').innerText.trim() : "Unknown User";
     let siteFilter = document.getElementById('export-site') ? document.getElementById('export-site').value : "ALL"; // Adjust this ID if your dropdown is named differently
     
     fetch(PERF_APP_URL, {
@@ -1058,7 +1058,7 @@ function exportPDF() {
     if (selectedHoles.length === 0) return alert("Please select at least one hole type to export.");
 
     // 🚨 NEW: Silent ping to log the download
-    let activeUser = document.getElementById('logged-user') ? document.getElementById('logged-user').innerText.trim() : "Unknown User";
+    let activeUser = document.getElementById('active-user-display') ? document.getElementById('active-user-display').innerText.trim() : "Unknown User";
     let siteFilter = document.getElementById('export-site') ? document.getElementById('export-site').value : "ALL"; // Adjust this ID if your dropdown is named differently
     
     fetch(PERF_APP_URL, {
@@ -1280,7 +1280,7 @@ function executeFdmExport() {
     // 🚨 SAFE USERNAME GRABBER
     // We declare the variable here so it is never "undefined"
     let activeUsername = "Unknown User"; 
-    
+    const downloadUser = document.getElementById('active-user-display') ? document.getElementById('active-user-display').innerText.trim() : "Unknown User";
     // Attempt to read the username from the screen.
     // NOTE: Change 'logged-user' to the actual ID of the HTML element where you display the user's name!
     const userDisplayElement = document.getElementById('logged-user'); 
@@ -1332,42 +1332,41 @@ function executeFdmExport() {
         alert("Check Console F12 for detail: " + err.message);
     });
 }
-// ==========================================
-// 🚨 PERFECTED DRILL DEFS (Smart Keyword Matching)
-// Added the missing 3.1/35mm Rockbolt category
-// ==========================================
-const drillDefs = [
-    { title: "Face Drilling - 4.3/45mm", match: (t) => t.includes("face") && t.includes("4.3") },
-    { title: "Face Drilling - 4.9/45mm", match: (t) => t.includes("face") && t.includes("4.9") },
-    { title: "Face Drilling - 5.5/48mm", match: (t) => t.includes("face") && t.includes("5.5") },
-    
-    { title: "Reaming - 4.3/102mm", match: (t) => t.includes("ream") && t.includes("4.3") },
-    { title: "Reaming - 4.9/102mm", match: (t) => t.includes("ream") && t.includes("4.9") },
-    { title: "Reaming - 5.5/102mm", match: (t) => t.includes("ream") && t.includes("5.5") },
-    
-    // 🚨 NEW: 3.1 / 35mm (Checks for Bolt/Split AND either 3.1 or 35)
-    { title: "Rock bolt & Split Set - 3.1/35mm", 
-      match: (t) => (t.includes("bolt") || t.includes("split")) && (t.includes("3.1") || t.includes("35")) },
-
-    // Combined Rockbolt & Split Set 2.8
-    { title: "Rock bolt & Split Set - 2.8/33mm", 
-      match: (t) => (t.includes("bolt") && t.includes("2.8")) || (t.includes("split") && t.includes("2.8")) },
-      
-    // Combined Rockbolt & Split Set 2.1
-    { title: "Rock bolt & Split Set - 2.1/33mm", 
-      match: (t) => (t.includes("bolt") && t.includes("2.1")) || (t.includes("split") && t.includes("2.1")) },
-      
-    { title: "Scaling", match: (t) => t.includes("scal") },
-    { title: "Production", match: (t) => t.includes("prod") }
-];
 
 async function buildFdmExcelFile(res, params) {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('MONTHLY FDM');
 
     // ==========================================
-    // 1. DATA PROCESSING (Pivoting Tall Data)
+    // 1. DYNAMIC DATA PROCESSING (Pivoting Tall Data)
     // ==========================================
+    
+    // Step A: Dynamically build drillDefs from the actual data rows (Index 8 is Hole_Type, Index 11 is Meters)
+    let dynamicMap = {};
+    res.rows.forEach((r, index) => {
+        if (index === 0 && String(r[1]).toLowerCase().includes("date")) return;
+        let meters = parseFloat(r[11]) || 0;
+        let typeStr = String(r[8] || "").trim();
+        
+        if (meters > 0 && typeStr && typeStr !== "-") {
+            let safeKey = typeStr.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            if (!dynamicMap[safeKey]) {
+                dynamicMap[safeKey] = {
+                    title: typeStr, // Keeps the exact full name from the database
+                    match: (t) => t.toLowerCase() === typeStr.toLowerCase()
+                };
+            }
+        }
+    });
+
+    // Convert map to your active drillDefs array dynamically
+    const drillDefs = Object.values(dynamicMap);
+
+    // Safety fallback if no drilling data is found
+    if (drillDefs.length === 0) {
+        drillDefs.push({ title: "No Data", match: () => false });
+    }
+
     const typeGrandTotals = new Array(drillDefs.length).fill(0);
     const dailyTotals = {}; 
     const activeFleetsPerType = new Array(drillDefs.length).fill(null).map(() => new Set());
@@ -1381,7 +1380,7 @@ async function buildFdmExcelFile(res, params) {
 
         const dateStr = dateObj.toLocaleDateString('en-GB'); 
         const fleet = String(r[4] || "").trim(); 
-        const typeStr = String(r[8] || "").toLowerCase(); 
+        const typeStr = String(r[8] || "").trim().toLowerCase(); // Normalized for matching
         const meters = parseFloat(r[11]) || 0;            
         
         if (meters <= 0) return; 
@@ -1394,7 +1393,7 @@ async function buildFdmExcelFile(res, params) {
             };
         }
         
-        // 🚨 MAGIC FUNCTION MATCHER: Safely finds the keywords no matter how they are formatted
+        // 🚨 DYNAMIC MATCHER: Matches the exact tall database strings safely
         drillDefs.forEach((def, i) => {
             if (def.match(typeStr)) {
                 dailyTotals[dateStr].totals[i] += meters;
@@ -1415,6 +1414,7 @@ async function buildFdmExcelFile(res, params) {
     
     // Ensures at least 2 columns exist so Excel headers don't glitch
     const totalCols = Math.max(2, activeDefs.length + 1);
+
 
     // ==========================================
     // 2. LOGO AND TOP HEADERS
