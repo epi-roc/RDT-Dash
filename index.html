@@ -583,7 +583,7 @@ async function downloadHoleMatrixExcel() {
     const fromDate = document.getElementById('exp-date-from')?.value || "";
     const toDate = document.getElementById('exp-date-to')?.value || "";
     
-    // 🚨 1. SET BUTTON TO BUSY / LOADING STATE
+    // Set button to busy / loading state
     const btn = document.getElementById('btn-matrix-download');
     const originalContent = btn ? btn.innerHTML : "";
     if (btn) {
@@ -618,15 +618,15 @@ async function downloadHoleMatrixExcel() {
             return;
         }
 
-        let { holeGroupStructure, flatColumnsList, rows } = result.payload;
-        if (rows.length === 0) {
+        let { holeGroupStructure, flatColumnsList, rows, columnTotals, overallGrandTotal } = result.payload;
+        if (!rows || rows.length === 0) {
             alert("No data found for the selected criteria.");
             return;
         }
 
         let csvContent = "data:text/csv;charset=utf-8,";
 
-        // ROW 1: Super Header (Hole Types spanning across their fleets + sub-total column)
+        // ROW 1: Super Header
         let row1Parts = ["Date", "Shift"];
         holeGroupStructure.forEach(group => {
             for (let i = 0; i < group.spanCount; i++) {
@@ -640,7 +640,7 @@ async function downloadHoleMatrixExcel() {
         row1Parts.push('"GRAND TOTAL DRILLING"');
         csvContent += row1Parts.join(",") + "\r\n";
 
-        // ROW 2: Sub Header (Fleet names followed by the Hole's Sub-Total column)
+        // ROW 2: Sub Header
         let row2Parts = ["", ""]; 
         flatColumnsList.forEach(col => {
             row2Parts.push(`"${col.name}"`);
@@ -648,10 +648,9 @@ async function downloadHoleMatrixExcel() {
         row2Parts.push('""'); 
         csvContent += row2Parts.join(",") + "\r\n";
 
-        // DATA ROWS: Print date only on the first occurrence per day, ordered C -> A -> B
+        // DATA ROWS (Shifts C -> A -> B)
         let lastDate = "";
         rows.forEach(r => {
-            // Display date only if it's a new date, otherwise leave blank
             let currentDateDisplay = (r.date !== lastDate) ? r.date : "";
             lastDate = r.date;
 
@@ -669,6 +668,16 @@ async function downloadHoleMatrixExcel() {
             csvContent += lineParts.join(",") + "\r\n";
         });
 
+        // BOTTOM SUMMARY ROW: TOTAL
+        let totalRowParts = ['"TOTAL"', '""'];
+        flatColumnsList.forEach(col => {
+            let colKey = `${col.hole}__${col.name}`;
+            let sumVal = columnTotals[colKey] || 0;
+            totalRowParts.push(sumVal);
+        });
+        totalRowParts.push(overallGrandTotal);
+        csvContent += totalRowParts.join(",") + "\r\n";
+
         let encodedUri = encodeURI(csvContent);
         let link = document.createElement("a");
         link.setAttribute("href", encodedUri);
@@ -681,7 +690,7 @@ async function downloadHoleMatrixExcel() {
         console.error("Matrix download failed:", e);
         alert("Failed to download matrix report.");
     } finally {
-        // 🚨 2. RESTORE BUTTON TO NORMAL STATE WHEN DONE
+        // Always restore button state
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = originalContent;
