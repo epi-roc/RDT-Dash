@@ -329,16 +329,20 @@ async function attemptLogin() {
         const res = await fetch(PERF_APP_URL, { method: "POST", body: payload }).then(r => r.json());
         
         if (res.status === "SUCCESS") {
-            // Store permissions
-            currentUserRole = res.role || "Operator";
-            currentUserSite = res.site || "ALL";
+            // 🚨 BIND PERMISSIONS GLOBALLY FOR ALL EXPORT SECURITY LOCKS
+            window.currentUserRole = res.role || "Operator";
+            window.currentUserSite = res.site || "ALL";
+
+            // (Optional: keep your original variables updated too, in case other parts of your code rely on them)
+            currentUserRole = window.currentUserRole;
+            currentUserSite = window.currentUserSite;
 
             document.getElementById('login-overlay').style.display = 'none';
             document.getElementById('active-user-display').innerText = res.user;
-            document.getElementById('active-role-display').innerText = currentUserRole;
+            document.getElementById('active-role-display').innerText = window.currentUserRole;
 
             // 🚨 SECURITY: If not Admin, remove Costing & Consumption tabs permanently
-            if (currentUserRole.toLowerCase() !== "admin") {
+            if (window.currentUserRole.toLowerCase() !== "admin") {
                 const modeSel = document.getElementById('flt-mode');
                 for (let i = modeSel.options.length - 1; i >= 0; i--) {
                     if (modeSel.options[i].value !== "PERFORMANCE") {
@@ -483,7 +487,25 @@ function openExportMenu() {
     document.getElementById('exp-date-to').value = document.getElementById('flt-date-to').value;
     document.getElementById('export-overlay').style.display = 'flex';
 
-    // 🚨 ADD THIS LINE HERE: Automatically loads dynamic hole types for this site/date range!
+    // 🚨 SECURITY LOCK: Restrict site dropdown for Site Managers
+    const siteDropdown = document.getElementById('exp-site');
+    let userRole = (window.currentUserRole || "").trim().toLowerCase();
+    let userSite = (window.currentUserSite || "").trim().toLowerCase();
+
+    if (userRole.includes("manager") || (userSite && userSite !== "all" && userSite !== "admin")) {
+        let assignedSite = window.currentUserSite;
+        siteDropdown.innerHTML = `<option value="${assignedSite}">${assignedSite.toUpperCase()}</option>`;
+        siteDropdown.value = assignedSite;
+        siteDropdown.disabled = true; 
+        siteDropdown.style.backgroundColor = "#e0e0e0";
+        siteDropdown.style.cursor = "not-allowed";
+    } else {
+        siteDropdown.disabled = false;
+        siteDropdown.style.backgroundColor = "";
+        siteDropdown.style.cursor = "pointer";
+    }
+
+    // Automatically loads dynamic hole types for this site/date range
     loadDynamicHoleTypes();
 }
 function toggleAllChecks(state) {
@@ -583,6 +605,9 @@ async function downloadHoleMatrixExcel() {
     const fromDate = document.getElementById('exp-date-from')?.value || "";
     const toDate = document.getElementById('exp-date-to')?.value || "";
     
+    // 🚨 Retrieve logged-in user's assigned site context for security validation
+    const userSite = window.currentUserSite || "all"; 
+    
     // Set button to busy / loading state
     const btn = document.getElementById('btn-matrix-download');
     const originalContent = btn ? btn.innerHTML : "";
@@ -606,6 +631,7 @@ async function downloadHoleMatrixExcel() {
             body: JSON.stringify({
                 action: "getHoleMatrixReport",
                 site: site,
+                userSite: userSite, // 🚨 Pass security context to backend
                 fromDate: fromDate,
                 toDate: toDate,
                 selectedHoles: selectedHoles
@@ -617,7 +643,6 @@ async function downloadHoleMatrixExcel() {
             alert("Error generating matrix: " + result.message);
             return;
         }
-
         let { holeGroupStructure, flatColumnsList, rows, columnTotals, overallGrandTotal } = result.payload;
         if (!rows || rows.length === 0) {
             alert("No data found for the selected criteria.");
@@ -1083,6 +1108,11 @@ function getStrictExportData() {
     const fromInput = document.getElementById('exp-date-from').value;
     const toInput = document.getElementById('exp-date-to').value;
 
+    // 🚨 SECURITY: Get logged-in user role & site context
+    const userRole = (window.currentUserRole || "").trim().toLowerCase();
+    const userSite = (window.currentUserSite || "").trim().toLowerCase();
+    const isSiteManager = userRole.includes("manager") || (userSite && userSite !== "all" && userSite !== "admin");
+
     let fromDate = new Date(fromInput);
     fromDate.setHours(0, 0, 0, 0);
     let toDate = new Date(toInput);
@@ -1097,6 +1127,13 @@ function getStrictExportData() {
         if (isNaN(rDate.getTime())) return false;
         rDate.setHours(0, 0, 0, 0); // Force to strict midnight
 
+        let rowSite = String(r[3] || "").trim().toLowerCase(); // Assuming Column D (index 3) is the Site
+
+        // 🚨 STRICT SITE GATEKEEPER FOR SITE MANAGERS
+        if (isSiteManager && rowSite !== userSite) {
+            return false; // Drop any row belonging to a different site
+        }
+
         // STRICT GATEKEEPERS
         let isDateMatch = rDate.getTime() >= fromDate.getTime() && rDate.getTime() <= toDate.getTime();
         let isFleetMatch = (selFleet === "ALL") || (String(r[4]).trim() === selFleet);
@@ -1104,7 +1141,6 @@ function getStrictExportData() {
         return isDateMatch && isFleetMatch;
     });
 }
-
 
 // ==========================================
 // 2. EXCEL EXPORT (Now with Strict Filtering)
@@ -1408,10 +1444,28 @@ function openDailyModal() {
         let sites = dbPerf.map(r => r[3] ? String(r[3]).trim() : "").filter(s => s && s !== "undefined");
         [...new Set(sites)].sort().forEach(s => siteSelect.add(new Option(s, s)));
         
+        // 🚨 SECURITY LOCK: Restrict site selection for Site Managers
+        let userRole = (window.currentUserRole || "").trim().toLowerCase();
+        let userSite = (window.currentUserSite || "").trim().toLowerCase();
+
+        if (userRole.includes("manager") || (userSite && userSite !== "all" && userSite !== "admin")) {
+            let assignedSite = window.currentUserSite;
+            siteSelect.innerHTML = `<option value="${assignedSite}">${assignedSite.toUpperCase()}</option>`;
+            siteSelect.value = assignedSite;
+            siteSelect.disabled = true;
+            siteSelect.style.backgroundColor = "#e0e0e0";
+            siteSelect.style.cursor = "not-allowed";
+        } else {
+            siteSelect.disabled = false;
+            siteSelect.style.backgroundColor = "";
+            siteSelect.style.cursor = "pointer";
+        }
+        
     } catch (e) {
         console.error("Error populating dropdowns:", e);
     }
 }
+
 // --- THE FETCH PIPELINE ---
 function triggerDailyPDF() {
     // 1. Gather exact values
@@ -1479,24 +1533,28 @@ function executeFdmExport() {
     const btn = document.getElementById('btn-fdm-download');
 
     // 🚨 SAFE USERNAME GRABBER
-    // We declare the variable here so it is never "undefined"
     let activeUsername = "Unknown User"; 
     const downloadUser = document.getElementById('active-user-display') ? document.getElementById('active-user-display').innerText.trim() : "Unknown User";
-    // Attempt to read the username from the screen.
-    // NOTE: Change 'logged-user' to the actual ID of the HTML element where you display the user's name!
+    
     const userDisplayElement = document.getElementById('logged-user'); 
     if (userDisplayElement) {
         activeUsername = userDisplayElement.innerText.trim();
     }
 
+    // 🚨 SECURITY CONTEXT: Grab session role and site to enforce server-side restrictions
+    const userRole = window.currentUserRole || "";
+    const userSite = window.currentUserSite || "";
+
     const params = {
+        action: "generateFDM", // Make sure your action name matches your backend switch case
         fromDate: document.getElementById('fdm-from-date').value,
         toDate: document.getElementById('fdm-to-date').value,
         customer: document.getElementById('fdm-customer').value,
         site: document.getElementById('fdm-site').value,
-        user: activeUsername  // Now this is safely defined and won't crash!
+        user: activeUsername,
+        userRole: userRole,   // 🚨 Pass role for backend security validation
+        userSite: userSite    // 🚨 Pass assigned site for backend security validation
     };
-
     
     if (!params.fromDate || !params.toDate) return alert("Select both dates.");
 
@@ -1787,6 +1845,24 @@ function openIsolatedFdmModal() {
             custSelect.innerHTML = data.customers.map(c => `<option value="${c}">${c}</option>`).join('');
             // Populate Site
             siteSelect.innerHTML = data.sites.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            // 🚨 SECURITY LOCK: Restrict site selection for Site Managers immediately after loading
+            let userRole = (window.currentUserRole || "").trim().toLowerCase();
+            let userSite = (window.currentUserSite || "").trim().toLowerCase();
+
+            if (userRole.includes("manager") || (userSite && userSite !== "all" && userSite !== "admin")) {
+                let assignedSite = window.currentUserSite;
+                siteSelect.innerHTML = `<option value="${assignedSite}">${assignedSite.toUpperCase()}</option>`;
+                siteSelect.value = assignedSite;
+                siteSelect.disabled = true;
+                siteSelect.style.backgroundColor = "#e0e0e0";
+                siteSelect.style.cursor = "not-allowed";
+            } else {
+                siteSelect.disabled = false;
+                siteSelect.style.backgroundColor = "";
+                siteSelect.style.cursor = "pointer";
+            }
+
         } else {
             console.error("Backend Error:", data.message);
             alert("Backend Error: " + data.message);
@@ -1799,6 +1875,29 @@ function openIsolatedFdmModal() {
         alert("Handshake Failed. Check F12 Console for details.");
     });
 }
+function applySiteSecurityLock(dropdownId) {
+    const dropdown = document.getElementById(dropdownId);
+    if (!dropdown) return;
+
+    let userRole = (window.currentUserRole || "").trim().toLowerCase();
+    let userSite = (window.currentUserSite || "").trim().toLowerCase();
+
+    // If they are a Site Manager (and not an Admin), lock the site dropdown to their specific site
+    if (userRole.includes("manager") || (userSite && userSite !== "all" && userSite !== "admin")) {
+        let assignedSite = window.currentUserSite;
+        dropdown.innerHTML = `<option value="${assignedSite}">${assignedSite.toUpperCase()}</option>`;
+        dropdown.value = assignedSite;
+        dropdown.disabled = true;
+        dropdown.style.backgroundColor = "#e0e0e0";
+        dropdown.style.cursor = "not-allowed";
+    } else {
+        // Admins have full access
+        dropdown.disabled = false;
+        dropdown.style.backgroundColor = "";
+        dropdown.style.cursor = "pointer";
+    }
+}
+
 </script>
 <button class="btn-primary" onclick="openDailyModal()">Export Daily DPR</button>
 
