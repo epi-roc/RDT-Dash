@@ -548,13 +548,18 @@ async function loadDynamicHoleTypes() {
                 container.appendChild(label);
             });
         } else if (result.status === "EMPTY") {
-            // PRINTS THE DEBUG TEXT DIRECTLY IN THE UI
-            container.innerHTML = `<p style='color:#e74c3c; font-size:12px; padding: 10px;'>0 Results. ${result.message}</p>`;
+            // 🚨 CLEAN UI FOR THE USER
+            container.innerHTML = `<p style='color:#e74c3c; font-size:13px; padding: 15px 10px; font-weight: 500;'>No data found for the selected site and dates.</p>`;
+            
+            // 🤫 SECRET DEBUG LOG FOR THE DEVELOPER
+            console.log("Empty query details:", result.message);
         } else {
-            // PRINTS SERVER CRASHES
-            container.innerHTML = `<p style='color:#e74c3c; font-size:12px; padding: 10px;'>Error: ${result.message}</p>`;
-        }
-        
+            // 🚨 CLEAN ERROR MESSAGE FOR THE USER
+            container.innerHTML = `<p style='color:#e74c3c; font-size:13px; padding: 15px 10px; font-weight: 500;'>Unable to load data. Please try again.</p>`;
+            
+            // 🤫 SECRET ERROR LOG FOR THE DEVELOPER
+            console.error("Backend Error:", result.message);
+        }        
     } // End of the try block
     
     // 🚨 THIS WAS THE MISSING PART: The catch block!
