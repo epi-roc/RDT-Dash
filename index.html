@@ -478,8 +478,10 @@ function openExportMenu() {
     document.getElementById('exp-date-from').value = document.getElementById('flt-date-from').value;
     document.getElementById('exp-date-to').value = document.getElementById('flt-date-to').value;
     document.getElementById('export-overlay').style.display = 'flex';
-}
 
+    // 🚨 ADD THIS LINE HERE: Automatically loads dynamic hole types for this site/date range!
+    loadDynamicHoleTypes();
+}
 function toggleAllChecks(state) {
     document.querySelectorAll('.hole-chk').forEach(chk => chk.checked = state);
 }
@@ -498,6 +500,73 @@ function getSelectedHoles() {
     });
     return configs;
 }
+
+
+
+async function loadDynamicHoleTypes() {
+    const site = document.getElementById('exp-site')?.value || ""; 
+    const fromDate = document.getElementById('exp-date-from')?.value || "";
+    const toDate = document.getElementById('exp-date-to')?.value || "";
+    const container = document.getElementById('hole-check-container');
+
+    if (!container) return;
+    container.innerHTML = "<p style='color:#aaa; font-size:12px; padding: 10px;'>Loading active hole types...</p>";
+
+    // The try block starts here
+    try {
+        // 🚨 Make sure to paste your actual Web App URL here!
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwh9z8EYgkQ-6LzfXJN6BC5VdmaD98KUmnzy9P8tppFbCjzObZ5E8vdhKpmw4VfVhwz/exec"; 
+
+        const response = await fetch(WEB_APP_URL, {
+            method: "POST",
+            body: JSON.stringify({
+                action: "getSiteHoleTypes",
+                site: site,
+                fromDate: fromDate,
+                toDate: toDate
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.status === "SUCCESS" && result.payload && result.payload.length > 0) {
+            container.innerHTML = ""; 
+            result.payload.forEach((hole, index) => {
+                const label = document.createElement('label');
+                label.className = "chk-item";
+                const checkbox = document.createElement('input');
+                checkbox.type = "checkbox";
+                checkbox.className = "hole-chk";
+                checkbox.value = (index + 1) * 4; 
+                checkbox.checked = true; 
+                
+                checkbox.setAttribute('data-lbl', hole);
+                checkbox.setAttribute('data-short', hole.split('-')[0].trim());
+
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(" " + hole));
+                container.appendChild(label);
+            });
+        } else if (result.status === "EMPTY") {
+            // PRINTS THE DEBUG TEXT DIRECTLY IN THE UI
+            container.innerHTML = `<p style='color:#e74c3c; font-size:12px; padding: 10px;'>0 Results. ${result.message}</p>`;
+        } else {
+            // PRINTS SERVER CRASHES
+            container.innerHTML = `<p style='color:#e74c3c; font-size:12px; padding: 10px;'>Error: ${result.message}</p>`;
+        }
+        
+    } // End of the try block
+    
+    // 🚨 THIS WAS THE MISSING PART: The catch block!
+    catch (e) {
+        console.error("Failed to fetch dynamic checkboxes:", e);
+        container.innerHTML = `<p style='color:#e74c3c; font-size:12px; padding: 10px;'>Error communicating with server.</p>`;
+    } 
+}
+// Also refresh them if the user changes the site or dates directly inside the export menu
+document.getElementById('exp-site')?.addEventListener('change', loadDynamicHoleTypes);
+document.getElementById('exp-date-from')?.addEventListener('change', loadDynamicHoleTypes);
+document.getElementById('exp-date-to')?.addEventListener('change', loadDynamicHoleTypes);
 
 function updateExpSite() {
     const selCust = document.getElementById('exp-cust').value;
